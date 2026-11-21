@@ -1,0 +1,2460 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Magneto Drift</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #05070c;
+    --steel1: #1c2330; --steel2: #10151f; --steel3: #0a0e16;
+    --edge: #2e3a50; --edge-hi: rgba(255,255,255,.07);
+    --text: #e3e9f5; --muted: #8796b0; --dim: #5d6b85;
+    --cyan: #4fd6ff; --amber: #ffb547; --green: #5dff9e; --red: #ff5d5d; --violet: #a78bfa; --pink: #f472b6; --gold: #facc15;
+    --into: #5b86ff; --out: #ffa63d;
+    --head: "Orbitron", "Segoe UI", system-ui, sans-serif;
+    --ui: "Rajdhani", "Segoe UI", system-ui, sans-serif;
+    --mono: "Share Tech Mono", Consolas, "Courier New", monospace;
+    --body: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font: 15px/1.45 var(--body); user-select: none; }
+  button { font: inherit; color: inherit; }
+  canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  canvas#fx { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 40; }
+  #scan { position: fixed; inset: 0; pointer-events: none; z-index: 4;
+    background: repeating-linear-gradient(0deg, rgba(255,255,255,.018) 0 1px, transparent 1px 3px); mix-blend-mode: overlay; }
+
+  /* ---------- realistic console panels ---------- */
+  .console { position: relative; background: linear-gradient(180deg, var(--steel1), var(--steel2)); border: 1px solid var(--edge);
+    border-radius: 6px; box-shadow: inset 0 1px 0 var(--edge-hi), inset 0 -1px 0 rgba(0,0,0,.6), 0 10px 30px rgba(0,0,0,.55); }
+  .console.screw:before, .console.screw:after { content: ""; position: absolute; top: 6px; width: 7px; height: 7px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #9aa6ba, #3a4456 60%, #1a202b); box-shadow: 0 0 0 1px rgba(0,0,0,.5); }
+  .console.screw:before { left: 6px; } .console.screw:after { right: 6px; }
+  .phead { display: flex; align-items: center; gap: 8px; padding: 6px 10px; font: 700 11px/1 var(--ui); letter-spacing: 2.5px; text-transform: uppercase;
+    color: var(--muted); border-bottom: 1px solid var(--edge); background: linear-gradient(180deg, rgba(255,255,255,.035), transparent); }
+  .phead .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); animation: blinkdot 2s infinite; }
+  .phead .r { margin-left: auto; font-family: var(--mono); letter-spacing: 1px; color: var(--dim); }
+  @keyframes blinkdot { 50% { opacity: .35; } }
+  .screen-glass { background: #04070b; border: 1px solid #1e2838; border-radius: 4px; box-shadow: inset 0 0 18px rgba(0,0,0,.9); position: relative; overflow: hidden; }
+  .screen-glass:after { content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(0deg, rgba(0,0,0,.25) 0 1px, transparent 1px 3px), radial-gradient(ellipse at 50% 0%, rgba(255,255,255,.06), transparent 60%); }
+  .mono { font-family: var(--mono); }
+  .hazard { height: 6px; background: repeating-linear-gradient(-45deg, #f5b700 0 8px, #15181f 8px 16px); opacity: .85; }
+
+  /* ---------- HUD ---------- */
+  body:not(.playing) .hud { display: none !important; }
+  #topbar { position: fixed; top: 0; left: 0; right: 0; height: 54px; z-index: 6; display: flex; align-items: stretch; gap: 0; border-radius: 0; border-left: 0; border-right: 0; }
+  #topbar > div { display: flex; align-items: center; padding: 0 14px; border-right: 1px solid var(--edge); }
+  #topbar .mis { flex: 1; min-width: 0; gap: 10px; }
+  #topbar .mis .tag { font: 700 11px var(--ui); letter-spacing: 2px; color: #000; background: var(--amber); padding: 3px 7px; border-radius: 2px; white-space: nowrap; }
+  #topbar .mis .nm { font: 700 17px var(--ui); letter-spacing: 1px; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .leds { gap: 6px; }
+  .led { font: 700 11px var(--ui); letter-spacing: 1.5px; padding: 5px 8px; border-radius: 3px; border: 1px solid #2a3344; color: #4a566c; background: #0b0f17; white-space: nowrap; }
+  .led.on-in { color: #cfe0ff; border-color: var(--into); background: rgba(91,134,255,.25); box-shadow: 0 0 12px rgba(91,134,255,.6), inset 0 0 8px rgba(91,134,255,.4); }
+  .led.on-out { color: #fff1db; border-color: var(--out); background: rgba(255,166,61,.25); box-shadow: 0 0 12px rgba(255,166,61,.6), inset 0 0 8px rgba(255,166,61,.4); }
+  .led.on-off { color: #b5c0d4; border-color: #4a566c; background: #151b27; }
+  .led.on-pos { color: #ffd6d6; border-color: var(--red); background: rgba(255,93,93,.22); box-shadow: 0 0 10px rgba(255,93,93,.5); }
+  .led.on-neg { color: #d6f6ff; border-color: var(--cyan); background: rgba(79,214,255,.2); box-shadow: 0 0 10px rgba(79,214,255,.5); }
+  .tstats { gap: 18px; }
+  .tstats div { text-align: center; }
+  .tstats small { display: block; font: 700 10px var(--ui); letter-spacing: 2px; color: var(--dim); }
+  .tstats b { font: 400 20px/1 var(--mono); color: var(--green); text-shadow: 0 0 8px rgba(93,255,158,.5); }
+  #hScore { color: #facc15; text-shadow: 0 0 8px rgba(250,204,21,.5); display: inline-block; }
+  #hScore.bump { animation: scBump .35s; } #hScore.drop { animation: scDrop .5s; }
+  @keyframes scBump { 40% { transform: scale(1.35); } }
+  @keyframes scDrop { 0%,60% { color: #ff5d5d; text-shadow: 0 0 10px #ff5d5d; } 20% { transform: translateX(-4px); } 40% { transform: translateX(4px); } }
+  .scoreline { text-align: center; margin: 2px 0 6px; } .scoreline b { font: 700 34px var(--mono); color: #facc15; text-shadow: 0 0 12px rgba(250,204,21,.5); }
+  .scoreline small { display: block; font: 600 11px var(--ui); letter-spacing: 1px; color: var(--dim); }
+  #pauseBtn { width: 40px; height: 36px; border-radius: 4px; border: 1px solid var(--edge); background: linear-gradient(180deg, #273042, #151b27); cursor: pointer; font-weight: 700; letter-spacing: -2px; }
+  #pauseBtn:hover { border-color: var(--cyan); }
+
+  #telemetry { position: fixed; top: 64px; left: 10px; width: 236px; z-index: 6; }
+  #sensors { position: fixed; top: 64px; right: 10px; width: 236px; z-index: 6; }
+  #gauge { width: 100%; height: 128px; display: block; }
+  .readouts { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 8px; }
+  .readouts div { background: #070a10; border: 1px solid #1b2433; border-radius: 3px; padding: 3px 7px; }
+  .readouts small { display: block; font: 700 9.5px var(--ui); letter-spacing: 1.5px; color: var(--dim); }
+  .readouts b { font: 400 15px var(--mono); color: var(--cyan); text-shadow: 0 0 6px rgba(79,214,255,.45); white-space: nowrap; }
+  .readouts .wide { grid-column: span 2; }
+  .readouts .wide b { color: var(--amber); text-shadow: 0 0 6px rgba(255,181,71,.45); }
+  .glasswrap { padding: 8px; }
+  #mini { width: 100%; aspect-ratio: 1.6; display: block; }
+  #radar { width: 100%; aspect-ratio: 1.45; display: block; }
+  #scope { width: 100%; aspect-ratio: 1.9; display: block; }
+  body.compact #sensors, body.compact #gauge, body.compact .mini-wrap { display: none; }
+
+  #bossbar { position: fixed; top: 62px; left: 50%; transform: translateX(-50%); width: min(520px, calc(100% - 520px)); z-index: 6; padding: 8px 12px 10px; display: none; }
+  body.playing.boss #bossbar { display: block; }
+  .bbar { margin-top: 6px; }
+  .bbar .lab { display: flex; justify-content: space-between; font: 700 11px var(--ui); letter-spacing: 2px; color: var(--muted); }
+  .bbar .lab b { font: 400 13px var(--mono); color: var(--text); letter-spacing: 0; }
+  .bbar .trk { height: 12px; background: #06080d; border: 1px solid #263044; border-radius: 2px; overflow: hidden; margin-top: 3px; }
+  .bbar .trk i { display: block; height: 100%; width: 50%; transition: width .2s; }
+  #coreBar { background: repeating-linear-gradient(90deg, #ff4d4d 0 10px, #c81e1e 10px 12px); box-shadow: 0 0 12px #ff4d4d; }
+  #beamBar { background: repeating-linear-gradient(90deg, #4fd6ff 0 10px, #1e88b5 10px 12px); box-shadow: 0 0 12px #4fd6ff; }
+  #bossPhase { font: 800 13px var(--head); letter-spacing: 3px; color: var(--red); text-align: center; }
+
+  #toast { position: fixed; left: 50%; bottom: 128px; transform: translateX(-50%); padding: 8px 18px; border-radius: 3px; z-index: 7;
+    background: rgba(8,11,17,.92); border: 1px solid var(--edge); border-left: 4px solid var(--cyan); font: 700 15px var(--ui); letter-spacing: .5px;
+    opacity: 0; transition: opacity .25s; white-space: nowrap; pointer-events: none; }
+  #toast.show { opacity: 1; }
+  #banner { position: fixed; left: 50%; top: 40%; transform: translate(-50%,-50%); text-align: center; z-index: 7; opacity: 0; transition: opacity .5s, transform .5s; pointer-events: none; }
+  #banner.show { opacity: 1; transform: translate(-50%,-62%); }
+  #banner .t1 { font: 700 14px var(--ui); letter-spacing: 8px; color: var(--amber); }
+  #banner .t2 { font-family: var(--head); font-weight: 900; font-size: clamp(26px, 4.6vw, 52px); text-shadow: 0 0 30px rgba(79,214,255,.7); text-transform: uppercase; }
+  #banner .ln { height: 2px; margin: 8px auto 0; width: 60%; background: linear-gradient(90deg, transparent, var(--amber), transparent); }
+
+  .pad { position: fixed; bottom: 16px; width: 132px; height: 98px; z-index: 6; display: none; cursor: pointer; touch-action: none;
+    border-radius: 8px; border: 1px solid #3a465c; background: linear-gradient(180deg, #2a3345, #141a25);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.12), inset 0 -3px 0 rgba(0,0,0,.5), 0 6px 18px rgba(0,0,0,.6);
+    flex-direction: column; align-items: center; justify-content: center; gap: 3px; transition: box-shadow .12s, transform .08s; }
+  body.playing .pad { display: flex; }
+  .pad .sym { font-size: 30px; line-height: 1; }
+  .pad small { font: 700 11px var(--ui); letter-spacing: 1.5px; color: var(--muted); text-transform: uppercase; }
+  .pad .key { position: absolute; top: 6px; right: 8px; font: 11px var(--mono); color: var(--dim); }
+  #padL { left: 16px; } #padR { right: 16px; }
+  #padK { left: 50%; transform: translateX(-50%); width: 150px; display: none !important; }
+  body.playing.boss #padK { display: flex !important; }
+  #padL.on { transform: translateY(2px); border-color: var(--into); box-shadow: 0 0 26px var(--into), inset 0 0 22px rgba(91,134,255,.45); }
+  #padR.on { transform: translateY(2px); border-color: var(--out); box-shadow: 0 0 26px var(--out), inset 0 0 22px rgba(255,166,61,.45); }
+  #padK.ready { border-color: var(--green); box-shadow: 0 0 30px var(--green), inset 0 0 24px rgba(93,255,158,.45); }
+  #padK.on { transform: translateX(-50%) translateY(2px); }
+
+  #tut { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); width: min(560px, calc(100% - 320px)); z-index: 6; display: none; }
+  body.playing.tutorial #tut { display: block; }
+  #tut .in { display: flex; gap: 12px; align-items: center; padding: 10px 12px; }
+  #tut .mascot { width: 66px; flex: none; }
+  #tut .txt { flex: 1; font-size: 14px; }
+  #tut .bar { height: 6px; background: #06080d; border: 1px solid #263044; border-radius: 2px; margin-top: 8px; overflow: hidden; }
+  #tut .bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--cyan), var(--green)); box-shadow: 0 0 10px var(--cyan); }
+  #tut .dots { display: flex; gap: 5px; margin-top: 6px; }
+  #tut .dots span { width: 16px; height: 4px; background: #263044; }
+  #tut .dots span.on { background: var(--cyan); box-shadow: 0 0 6px var(--cyan); }
+
+  /* ---------- full screens ---------- */
+  .screen { position: fixed; inset: 0; display: none; z-index: 10; overflow: auto; }
+  .screen.show { display: block; }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 18px 18px 40px; }
+  .titlebar { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; padding: 10px 12px; }
+  .titlebar h2 { margin: 0; font: 800 20px var(--head); letter-spacing: 2px; flex: 1; text-transform: uppercase; }
+  .titlebar h2 small { display: block; font: 600 12px var(--ui); letter-spacing: 3px; color: var(--muted); }
+  .cbtn { padding: 8px 14px; border-radius: 4px; border: 1px solid #3a465c; background: linear-gradient(180deg, #2a3345, #161c28); cursor: pointer;
+    font: 700 14px var(--ui); letter-spacing: 1px; text-transform: uppercase; box-shadow: inset 0 1px 0 rgba(255,255,255,.1); white-space: nowrap; }
+  .cbtn:hover { border-color: var(--cyan); color: #fff; }
+  .cbtn.primary { background: linear-gradient(180deg, #2fb8f0, #1477a8); border-color: #5fd8ff; color: #021018; box-shadow: 0 0 18px rgba(79,214,255,.35), inset 0 1px 0 rgba(255,255,255,.35); }
+  .cbtn.warn { background: linear-gradient(180deg, #ffbf5a, #c07a12); border-color: #ffd28a; color: #1a0f00; }
+  .cbtn.danger { border-color: rgba(255,93,93,.6); color: var(--red); }
+  .cbtn:disabled { opacity: .4; cursor: not-allowed; }
+
+  /* main menu */
+  #menu { overflow: hidden; }
+  .mgrid { height: 100%; display: grid; grid-template-columns: 340px 1fr 330px; grid-template-rows: auto 1fr auto; gap: 12px; padding: 12px; }
+  .mtop { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; padding: 8px 14px; }
+  .mtop .sys { font: 600 12px var(--mono); color: var(--muted); display: flex; gap: 18px; flex-wrap: wrap; }
+  .mtop .sys b { color: var(--green); font-weight: 400; }
+  .mtop .ver { margin-left: auto; font: 12px var(--mono); color: var(--dim); }
+  .mleft { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+  .logo { padding: 18px 16px 14px; text-align: left; }
+  .logo .row { display: flex; align-items: center; gap: 12px; }
+  .logo svg { width: 64px; height: 64px; flex: none; }
+  .logo h1 { margin: 0; font-family: var(--head); font-weight: 900; line-height: .95; letter-spacing: 2px; font-size: 36px; }
+  .logo h1 .a { background: linear-gradient(90deg, #4fd6ff, #a78bfa 55%, #f472b6); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 0 14px rgba(124,140,255,.5)); }
+  .logo h1 .b { display: block; color: transparent; -webkit-text-stroke: 1.5px #e3e9f5; letter-spacing: 9px; font-size: .72em; margin-top: 4px; }
+  .logo p { margin: 10px 0 0; color: var(--muted); font-size: 13px; }
+  .nav { display: flex; flex-direction: column; padding: 6px; gap: 6px; }
+  .nbtn { display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 4px; cursor: pointer; text-align: left;
+    border: 1px solid #2a3446; background: linear-gradient(180deg, #1e2635, #121824); box-shadow: inset 0 1px 0 rgba(255,255,255,.06); transition: border-color .15s, transform .15s, box-shadow .15s; }
+  .nbtn:hover, .nbtn:focus-visible { border-color: var(--cyan); transform: translateX(4px); box-shadow: 0 0 18px rgba(79,214,255,.2), inset 0 1px 0 rgba(255,255,255,.06); outline: none; }
+  .nbtn .no { font: 14px var(--mono); color: var(--amber); }
+  .nbtn .lb { font: 700 17px var(--ui); letter-spacing: 1px; text-transform: uppercase; }
+  .nbtn .lb small { display: block; font: 500 12px var(--body); letter-spacing: 0; text-transform: none; color: var(--muted); }
+  .nbtn .ar { color: var(--dim); }
+  .nbtn.primary { border-color: rgba(79,214,255,.55); background: linear-gradient(90deg, rgba(79,214,255,.18), rgba(167,139,250,.12)), linear-gradient(180deg, #1e2635, #121824); }
+  .mcenter { position: relative; min-height: 0; }
+  .feed { position: absolute; inset: 0; border: 1px solid rgba(79,214,255,.18); border-radius: 4px; pointer-events: none; }
+  .feed i { position: absolute; width: 22px; height: 22px; border-color: var(--cyan); border-style: solid; opacity: .8; }
+  .feed i:nth-child(1) { top: -1px; left: -1px; border-width: 2px 0 0 2px; } .feed i:nth-child(2) { top: -1px; right: -1px; border-width: 2px 2px 0 0; }
+  .feed i:nth-child(3) { bottom: -1px; left: -1px; border-width: 0 0 2px 2px; } .feed i:nth-child(4) { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; }
+  .feed .lbl { position: absolute; top: 10px; left: 14px; font: 12px var(--mono); color: var(--cyan); letter-spacing: 1px; }
+  .feed .rec { position: absolute; top: 10px; right: 14px; font: 12px var(--mono); color: var(--red); }
+  .feed .rec:before { content: "● "; animation: blinkdot 1s infinite; }
+  .feed .cap { position: absolute; bottom: 10px; left: 14px; right: 14px; font: 12px var(--mono); color: var(--muted); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+  .mright { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow: auto; }
+  .prog { padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+  .prow { display: grid; grid-template-columns: 26px 1fr auto; gap: 8px; align-items: center; font-size: 13px; }
+  .prow .n { font: 12px var(--mono); color: var(--amber); }
+  .prow .s { color: var(--gold); letter-spacing: 1px; font-size: 12px; }
+  .prow .s.off { color: #39435a; }
+  .pbar { height: 4px; background: #0b0f17; border-radius: 2px; overflow: hidden; grid-column: 2 / 4; margin-top: -3px; }
+  .pbar i { display: block; height: 100%; background: linear-gradient(90deg, var(--cyan), var(--violet)); }
+  .consts { padding: 8px 10px; display: grid; gap: 4px; font: 13px var(--mono); }
+  .consts div { display: flex; justify-content: space-between; gap: 8px; border-bottom: 1px dashed #222b3b; padding: 3px 0; }
+  .consts span { color: var(--muted); } .consts b { font-weight: 400; color: var(--cyan); }
+  .profbox { display: flex; gap: 10px; padding: 10px; align-items: center; }
+  .profbox .mascot { width: 84px; flex: none; animation: bob 3.2s ease-in-out infinite; }
+  .profbox .fact { font-size: 13px; color: #cfd8ea; }
+  .profbox .fact b { display: block; font: 700 11px var(--ui); letter-spacing: 2px; color: var(--gold); margin-bottom: 3px; }
+  @keyframes bob { 50% { transform: translateY(-6px); } }
+  .ticker { grid-column: 1 / -1; overflow: hidden; white-space: nowrap; padding: 7px 0; font: 13px var(--mono); color: var(--muted); }
+  .ticker span { display: inline-block; padding-left: 100%; animation: tick 70s linear infinite; }
+  .ticker em { color: var(--amber); font-style: normal; margin: 0 18px; }
+  @keyframes tick { to { transform: translateX(-100%); } }
+  @media (max-width: 1100px) { .mgrid { grid-template-columns: 320px 1fr; } .mright { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; } .mright > * { flex: 1 1 280px; } #menu { overflow: auto; } .mgrid { height: auto; min-height: 100%; } .mcenter { min-height: 260px; } }
+  @media (max-width: 720px) { .mgrid { grid-template-columns: 1fr; } .mcenter { min-height: 200px; } }
+
+  /* mascot internals */
+  .mascot .eye { animation: blink 4s infinite; transform-origin: center; transform-box: fill-box; }
+  @keyframes blink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(.1); } }
+  .mascot .orb { animation: spin 6s linear infinite; transform-origin: 60px 64px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* mission select */
+  .sect { font: 700 13px var(--ui); letter-spacing: 3px; color: var(--amber); margin: 18px 2px 10px; display: flex; align-items: center; gap: 10px; text-transform: uppercase; }
+  .sect:after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, var(--edge), transparent); }
+  .mgrid2 { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 14px; }
+  .mcard { padding: 0; overflow: hidden; cursor: pointer; text-align: left; transition: transform .15s, border-color .15s, box-shadow .15s; }
+  .mcard:hover { transform: translateY(-3px); border-color: var(--c, var(--cyan)); box-shadow: 0 12px 30px rgba(0,0,0,.5), 0 0 22px var(--glow, transparent); }
+  .mcard .th { position: relative; }
+  .mcard canvas { width: 100%; aspect-ratio: 16/9; display: block; }
+  .mcard .badge { position: absolute; top: 8px; left: 8px; font: 700 11px var(--ui); letter-spacing: 2px; padding: 3px 7px; background: var(--amber); color: #000; border-radius: 2px; }
+  .mcard .badge.boss { background: var(--red); color: #fff; box-shadow: 0 0 12px var(--red); }
+  .mcard .info { padding: 10px 12px 12px; }
+  .mcard h3 { margin: 0 0 6px; font: 700 18px var(--ui); letter-spacing: .5px; text-transform: uppercase; }
+  .chips { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 8px; }
+  .chip { font: 12px var(--mono); padding: 2px 7px; border: 1px solid #2c3850; border-radius: 2px; color: #b8c6de; background: #0b1019; }
+  .mmeta { display: flex; align-items: center; gap: 10px; font: 12px var(--mono); color: var(--muted); }
+  .mmeta .st { color: var(--gold); letter-spacing: 1px; margin-left: auto; font-size: 14px; }
+  .diff { display: inline-flex; gap: 2px; } .diff i { width: 6px; height: 10px; background: #263044; } .diff i.on { background: var(--amber); box-shadow: 0 0 5px var(--amber); }
+  .mcard.locked { cursor: not-allowed; filter: grayscale(.9) brightness(.55); }
+  .mcard.locked:hover { transform: none; box-shadow: none; }
+  .custrow { display: flex; gap: 6px; padding: 0 12px 12px; }
+  .custrow .cbtn { flex: 1; padding: 6px; font-size: 12px; }
+
+  /* settings */
+  .spanel { max-width: 820px; }
+  .srow { display: flex; align-items: center; gap: 16px; padding: 12px 14px; border-bottom: 1px solid #1e2738; flex-wrap: wrap; }
+  .srow:last-child { border-bottom: 0; }
+  .srow .lbl { flex: 1; min-width: 220px; font: 700 16px var(--ui); letter-spacing: .5px; }
+  .srow .lbl small { display: block; font: 400 12.5px var(--body); color: var(--muted); letter-spacing: 0; }
+  .seg { display: flex; gap: 4px; flex-wrap: wrap; }
+  .seg button { padding: 6px 12px; border-radius: 3px; border: 1px solid #2c3850; background: #0d121b; cursor: pointer; font: 700 13px var(--ui); letter-spacing: 1px; }
+  .seg button.active { border-color: var(--cyan); color: var(--cyan); background: rgba(79,214,255,.1); box-shadow: inset 0 0 10px rgba(79,214,255,.2); }
+  .tog { width: 54px; height: 28px; border-radius: 3px; border: 1px solid #2c3850; background: #0b0f17; position: relative; cursor: pointer; flex: none; }
+  .tog:after { content: "OFF"; position: absolute; top: 3px; left: 3px; width: 24px; height: 20px; border-radius: 2px; background: #3a465c; font: 700 8px/20px var(--ui); text-align: center; color: #0b0f17; transition: left .15s, background .15s; }
+  .tog.on { border-color: var(--green); }
+  .tog.on:after { content: "ON"; left: 25px; background: var(--green); box-shadow: 0 0 10px var(--green); }
+  input[type=range] { accent-color: var(--cyan); width: 200px; }
+
+  /* physics book */
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+  .tabs button { padding: 7px 14px; border-radius: 3px; border: 1px solid #2c3850; background: #0d121b; cursor: pointer; font: 700 14px var(--ui); letter-spacing: 1px; text-transform: uppercase; }
+  .tabs button.active { border-color: var(--amber); color: var(--amber); box-shadow: inset 0 -2px 0 var(--amber); }
+  .page { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+  @media (max-width: 860px) { .page { grid-template-columns: 1fr; } }
+  .page .txt { padding: 14px 16px; }
+  .page .art { padding: 10px; }
+  .page .art svg { width: 100%; display: block; }
+  .page h3 { font: 800 19px var(--head); margin: 0 0 8px; letter-spacing: 1px; }
+  .formula { font-family: "Cambria Math", "Times New Roman", serif; font-size: 20px; text-align: center; background: #070a10; border: 1px solid #1e2838;
+    border-left: 3px solid var(--amber); border-radius: 3px; padding: 9px; margin: 10px 0; color: #fff; }
+  table.sym { width: 100%; border-collapse: collapse; font-size: 14px; margin: 8px 0; }
+  table.sym td, table.sym th { border-bottom: 1px solid #1e2738; padding: 6px 8px; text-align: left; }
+  table.sym th { color: var(--muted); font: 700 12px var(--ui); letter-spacing: 2px; text-transform: uppercase; }
+  table.sym td:first-child { font-family: var(--mono); color: var(--cyan); }
+  .cardgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 14px; }
+  .app { overflow: hidden; }
+  .app svg { width: 100%; display: block; }
+  .app div.t { padding: 10px 14px 14px; font-size: 14px; }
+  .app h4 { margin: 0 0 4px; font: 700 17px var(--ui); letter-spacing: 1px; text-transform: uppercase; }
+
+  /* design lab */
+  .edgrid { display: grid; grid-template-columns: 170px 1fr 290px; gap: 12px; align-items: start; }
+  @media (max-width: 1000px) { .edgrid { grid-template-columns: 1fr; } }
+  .tools { display: flex; flex-direction: column; gap: 5px; padding: 8px; }
+  @media (max-width: 1000px) { .tools { flex-direction: row; flex-wrap: wrap; } }
+  .tool { display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-radius: 3px; border: 1px solid #2a3446; background: #0e131c; cursor: pointer; font: 700 14px var(--ui); letter-spacing: .5px; text-align: left; }
+  .tool .ic { width: 22px; height: 22px; border-radius: 3px; display: grid; place-items: center; font: 700 12px var(--mono); flex: none; }
+  .tool.active { border-color: var(--amber); box-shadow: inset 0 0 10px rgba(255,181,71,.2); color: #fff; }
+  #edCanvas { width: 100%; display: block; cursor: crosshair; touch-action: none; }
+  .edside { display: flex; flex-direction: column; gap: 12px; }
+  .edside .body { padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+  .edside input[type=text], .edside textarea { width: 100%; background: #070a10; border: 1px solid #2c3850; border-radius: 3px; color: var(--text); padding: 7px 9px; font: 14px var(--mono); }
+  .edside textarea { height: 70px; resize: vertical; font-size: 11px; user-select: text; }
+  .check { font: 13px var(--mono); display: flex; justify-content: space-between; } .check .ok { color: var(--green); } .check .bad { color: var(--red); }
+  .btnrow { display: flex; gap: 6px; flex-wrap: wrap; } .btnrow .cbtn { flex: 1; }
+  .slist { display: flex; flex-direction: column; gap: 6px; max-height: 260px; overflow: auto; }
+  .sitem { display: flex; align-items: center; gap: 6px; padding: 6px 8px; background: #0b1019; border: 1px solid #1e2738; border-radius: 3px; font-size: 13px; }
+  .sitem span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sitem button { padding: 3px 8px; font-size: 11px; }
+  .edhint { font-size: 12.5px; color: var(--muted); padding: 8px 12px; }
+
+  /* ---------- modal ---------- */
+  #modal { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(2,4,8,.7); backdrop-filter: blur(4px); padding: 16px; z-index: 20; }
+  #modal.show { display: flex; }
+  .card { width: min(600px, 100%); max-height: calc(100vh - 32px); overflow: auto; animation: pop .22s ease-out; }
+  @keyframes pop { from { transform: scale(.95); opacity: 0; } }
+  .card .cbody { padding: 16px 18px 18px; }
+  .card h2 { margin: 0 0 6px; font: 800 22px var(--head); letter-spacing: 1px; text-transform: uppercase; }
+  .card .tag { color: var(--amber); font: 700 12px var(--ui); letter-spacing: 3px; text-transform: uppercase; }
+  .card ul { padding-left: 20px; margin: 10px 0; }
+  .card li { margin: 6px 0; }
+  .card svg.ill { display: block; width: 100%; margin: 8px 0; border-radius: 4px; border: 1px solid #1e2838; }
+  .goal { background: rgba(255,181,71,.07); border: 1px solid rgba(255,181,71,.35); border-left: 4px solid var(--amber); border-radius: 3px; padding: 8px 12px; margin: 10px 0; font-size: 14px; }
+  .prof { display: flex; gap: 10px; align-items: center; margin: 10px 0; }
+  .prof svg { width: 54px; flex: none; }
+  .prof p { margin: 0; background: #0b1019; border: 1px solid #1e2738; border-radius: 3px; padding: 8px 12px; font-size: 14px; }
+  .btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+  .btns .cbtn { flex: 1; min-width: 130px; padding: 11px 14px; font-size: 15px; }
+  .bigstars { text-align: center; font-size: 48px; letter-spacing: 10px; margin: 4px 0; }
+  .bigstars span { display: inline-block; color: #2a3346; animation: starpop .5s backwards; }
+  .bigstars span.on { color: var(--gold); text-shadow: 0 0 22px rgba(250,204,21,.75); }
+  @keyframes starpop { from { transform: scale(0) rotate(-90deg); } }
+  .debrief { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 10px 0; }
+  @media (max-width: 560px) { .debrief { grid-template-columns: repeat(2, 1fr); } }
+  .debrief div { background: #070a10; border: 1px solid #1e2838; border-radius: 3px; padding: 6px 8px; }
+  .debrief small { display: block; font: 700 10px var(--ui); letter-spacing: 1.5px; color: var(--dim); text-transform: uppercase; }
+  .debrief b { font: 400 17px var(--mono); color: var(--green); }
+  .debrief b.nb { color: var(--gold); }
+  .muted { color: var(--muted); font-size: 13px; }
+
+  @media (max-width: 980px) {
+    #sensors { display: none; }
+    #bossbar { width: calc(100% - 270px); left: auto; right: 10px; transform: none; }
+  }
+  @media (max-width: 700px) {
+    #topbar { height: 48px; } #topbar > div { padding: 0 8px; }
+    #topbar .leds { display: none; } .tstats { gap: 10px; } .tstats b { font-size: 16px; }
+    #telemetry { width: 170px; top: 56px; } #gauge, .mini-wrap { display: none; }
+    .readouts b { font-size: 12px; }
+    #bossbar { top: auto; bottom: 120px; width: calc(100% - 20px); right: 10px; }
+    .pad { width: 100px; height: 84px; } #padK { width: 110px; }
+    #tut { width: calc(100% - 20px); bottom: 112px; } #tut .mascot { width: 48px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="scan"></div>
+
+<!-- ======================= HUD ======================= -->
+<div class="hud console" id="topbar">
+  <div class="mis"><span class="tag" id="hTag">MISSION 01</span><span class="nm" id="hName"></span></div>
+  <div class="leds"><span class="led" id="ledIn">⊗ B IN</span><span class="led" id="ledOff">B OFF</span><span class="led" id="ledOut">⊙ B OUT</span><span class="led" id="ledQ">q +</span></div>
+  <div class="tstats"><div><small>TIME</small><b id="hTime">0.0</b></div><div id="hOrbsBox"><small id="hOrbsL">ORBS</small><b id="hOrbs">0/0</b></div><div><small>CRASH</small><b id="hCrash">0</b></div><div><small>SCORE</small><b id="hScore">0</b></div><button id="pauseBtn" title="Pause">❚❚</button></div>
+</div>
+<div class="hud console screw" id="telemetry">
+  <div class="phead"><span class="dot"></span>Telemetry<span class="r" id="tClock">00:00</span></div>
+  <canvas id="gauge"></canvas>
+  <div class="readouts" id="readouts"></div>
+  <div class="mini-wrap"><div class="phead">Right-hand rule<span class="r">F = qv×B</span></div><div class="glasswrap"><div class="screen-glass"><canvas id="mini"></canvas></div></div></div>
+</div>
+<div class="hud console screw" id="sensors">
+  <div class="phead"><span class="dot"></span>Radar<span class="r" id="rPos">x 0 y 0</span></div>
+  <div class="glasswrap"><div class="screen-glass"><canvas id="radar"></canvas></div></div>
+  <div class="phead">Scope · |F| mN<span class="r" id="sMax">MAX 0</span></div>
+  <div class="glasswrap"><div class="screen-glass"><canvas id="scope"></canvas></div></div>
+</div>
+<div class="hud console" id="bossbar">
+  <div id="bossPhase">PHASE 1</div>
+  <div class="bbar"><div class="lab">CORE CONTAINMENT<b id="coreTxt">100%</b></div><div class="trk"><i id="coreBar"></i></div></div>
+  <div class="bbar"><div class="lab">BEAM SPEED<b id="beamTxt">2.0 / 10.0 m/s</b></div><div class="trk"><i id="beamBar"></i></div></div>
+</div>
+<div id="toast"></div>
+<div id="banner"><div class="t1" id="bannerT1"></div><div class="t2" id="bannerT2"></div><div class="ln"></div></div>
+<button class="pad" id="padL"><span class="key">A / ◀</span><span class="sym">⊗</span><small id="padLtxt"></small></button>
+<button class="pad" id="padR"><span class="key">D / ▶</span><span class="sym">⊙</span><small id="padRtxt"></small></button>
+<button class="pad" id="padK"><span class="key">SPACE</span><span class="sym">⚡</span><small>KICK</small></button>
+<div id="tut" class="console screw"><div class="phead"><span class="dot"></span>Prof. Ion · training<span class="r" id="tutStepNo">1/7</span></div>
+  <div class="in"><div class="mascot" id="tutMascot"></div><div class="txt"><div id="tutText"></div><div class="bar"><i id="tutBar"></i></div><div class="dots" id="tutDots"></div></div></div></div>
+
+<!-- ======================= SCREENS ======================= -->
+<div class="screen" id="menu"></div>
+<div class="screen" id="missions"></div>
+<div class="screen" id="settings"></div>
+<div class="screen" id="book"></div>
+<div class="screen" id="editor"></div>
+
+<div id="modal"><div class="card console" id="card"></div></div>
+<canvas id="fx"></canvas>
+
+<script>
+"use strict";
+// =====================================================================
+//  SAVE DATA
+// =====================================================================
+const DEFAULTS = { lang: "en", sfx: 0.7, music: 0.45, speed: 1, circle: true, vectors: true, hud: "full",
+  shake: true, hq: true, scan: true, trail: "classic", unlockAll: false };
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+};
+const SET = Object.assign({}, DEFAULTS, store.get("md_settings", {}));
+const NMIS = 5; // 4 missions + boss
+function blankProgress() { return { tutorial: false, done: Array(NMIS).fill(false), stars: Array(NMIS).fill(0), best: Array(NMIS).fill(0), score: Array(NMIS).fill(0) }; }
+let PROG = (() => {
+  const p = Object.assign(blankProgress(), store.get("md4_progress", {}));
+  for (const k of ["done", "stars", "best", "score"]) { const b = blankProgress()[k]; p[k] = b.map((v, i) => p[k] && p[k][i] != null ? p[k][i] : v); }
+  return p;
+})();
+let CUSTOM = store.get("md_custom", []);
+const saveSet = () => store.set("md_settings", SET);
+const saveProg = () => store.set("md4_progress", PROG);
+const saveCustom = () => store.set("md_custom", CUSTOM);
+
+// =====================================================================
+//  UI TEXT
+// =====================================================================
+const TXT = {
+  en: {
+    tagline: "Particle steering laboratory. Control a charged particle using only magnetic fields and master the Lorentz force.",
+    nPlay: "Play", nPlaySub: "Continue to the next mission",
+    nMis: "Missions", nMisSub: "Select a mission or the boss",
+    nTut: "Training", nTutSub: "Learn the controls with Prof. Ion",
+    nLab: "Design Lab", nLabSub: "Build, test and share your own levels",
+    nBook: "Physics Book", nBookSub: "Formulas, diagrams, real-world uses",
+    nSet: "Settings", nSetSub: "Audio, language, HUD, effects",
+    progress: "Mission progress", consts: "Lab constants", fact: "Did you know?",
+    feedLbl: "CAM-01 · E×B DRIFT CHAMBER", feedCap: "Live: + and − charges loop in opposite directions but drift the same way",
+    facts: [
+      "Auroras happen when charged particles from the Sun spiral along Earth's magnetic field lines and hit the upper atmosphere.",
+      "The Large Hadron Collider uses 1232 superconducting dipole magnets (about 8.3 T) to bend protons around a 27 km ring.",
+      "An MRI scanner's magnet is usually 1.5–3 T, tens of thousands of times stronger than Earth's field (about 50 μT).",
+      "Old CRT televisions used magnetic coils to steer an electron beam across the screen.",
+      "In a cyclotron, the period T = 2πm / (qB) doesn't depend on speed. That's why it can keep accelerating particles in rhythm.",
+      "F = BIL for a wire is just F = qvB added up over every moving charge in the wire."
+    ],
+    back: "◀ Back", misTitle: "Mission select", misSub: "Choose your operation", sMain: "Main missions", sBoss: "Boss", sCustom: "Custom missions (Design Lab)",
+    noCustom: "No custom missions yet. Build one in the Design Lab!", locked: "LOCKED", best: "BEST", play: "Play", edit: "Edit",
+    setTitle: "Settings", setSub: "System configuration",
+    sLang: "Language", sSfx: "Sound effects", sMusic: "Music", sSpeed: "Game speed", sSpeedSub: "Slow mode makes turning easier",
+    slow: "Slow", normal: "Normal", fast: "Fast",
+    sHud: "HUD layout", sHudSub: "Full shows the radar, scope and gauges", full: "Full", compact: "Compact",
+    sCircle: "Turning circle", sCircleSub: "Dashed circle with radius r = mv/(|q|B)",
+    sVectors: "Force & velocity arrows", sVectorsSub: "Green v and red F on the particle",
+    sShake: "Screen shake", sScan: "CRT scanlines", sHq: "High-quality effects", sHqSub: "Turn off on slow computers",
+    sTrail: "Trail style", classic: "Classic", rainbow: "Rainbow", fire: "Fire", plasma: "Plasma",
+    sUnlock: "Unlock all missions", sUnlockSub: "Handy for presenting in class",
+    sReset: "Reset progress", sResetSub: "Clears stars, best times and unlocks", resetBtn: "Reset", resetSure: "Click again to confirm",
+    bookTitle: "Physics Book", bookSub: "Reference manual",
+    padL: "B into", padR: "B out of", padLb: "B stronger", padRb: "B weaker",
+    mission: "Mission", briefing: "Mission briefing", start: "Launch mission", orbs: "Orbs", time: "Time", crashes: "Crashes", score: "Score", scoreRule: "+100 per orb · +500 finish · −100 per wall crash", bestScore: "Best score",
+    goal: "Objective: collect the orbs and fly into the exit portal.",
+    crash: "Crash! A magnetic force can't brake. Turn earlier.",
+    accel: "⚡ Electric field did work: speed ↑, turning radius ↑",
+    decel: "⚡ Electric field slowed you: speed ↓, turning radius ↓",
+    flip: q => `± Charge flipped: q is now ${q > 0 ? "positive (+)" : "negative (−)"}`,
+    checkpoint: "✔ Checkpoint saved",
+    complete: "Mission complete", next: "Next mission", retry: "Retry", menu: "Main menu", toBoss: "Face the boss",
+    finishTitle: "All missions complete!", finishSub: "You mastered the Lorentz force.", totalStars: "Total stars",
+    summary: [
+      "F = q v × B is always perpendicular to v, so it turns the particle but never changes its speed.",
+      "Use the right-hand rule to find the direction of F. For a negative charge, it's reversed.",
+      "r = m v / (|q| B): a faster or heavier particle makes wider turns, and a stronger field makes tighter ones.",
+      "Electric fields can change the speed (W = qV). Magnetic fields can't (W = 0).",
+      "A cyclotron works because T = 2πm/(qB) doesn't depend on speed."
+    ],
+    again: "Play again", paused: "Paused", resume: "Resume", restart: "Restart", toLab: "Back to Design Lab",
+    tutDone: "Training complete!", tutDoneText: "You know how to steer. Now let's learn the physics behind it, one mission at a time.", toLevel1: "Start Mission 1",
+    nextBtn: "Next ▶", profSays: "Prof. Ion",
+    dMaxV: "Max speed", dMaxF: "Max force", dDist: "Distance", dField: "Field on", dBest: "Best time", dHits: "Ion hits", dKicks: "Kicks",
+    newBest: "NEW BEST!",
+    kick: "⚡ KICK! Speed ↑", ready: "READY", hit: "Ion hit! Speed ↓", extraction: "Extraction ready: hold ▶ to weaken B and widen your orbit!",
+    bossWin: "Core breached!", phase: "PHASE",
+    edTitle: "Design Lab", edSub: "Level editor", edTools: "Tools", edName: "Mission name", edTheme: "Theme",
+    edCheck: "Checks", edStart: "Start point", edPortal: "Exit portal", edOrbs: "Orbs",
+    edTest: "Test", edSave: "Save", edNew: "Clear", edShare: "Share code", edImport: "Load code", edCopy: "Copy", edLoad: "Load",
+    edSaved: "Saved missions", edNone: "Nothing saved yet.", edDel: "Del", edSureDel: "Sure?",
+    edHint: "Left-drag to paint · right-click to erase · border walls are fixed. Paint gates as full columns across a corridor.",
+    edNeed: "Place a start point and at least one exit portal first.",
+    edSavedMsg: "Mission saved!", edCopied: "Code copied!", edBad: "That code isn't valid.", edLoaded: "Mission loaded!",
+    tools: { "#": "Wall", ".": "Erase", "S": "Start", "E": "Exit portal", "o": "Orb", "C": "Checkpoint", "A": "Speed + gate", "D": "Speed − gate", "F": "Charge flip gate" },
+    untitled: "Untitled mission", custom: "Custom"
+  },
+  id: {
+    tagline: "Laboratorium kemudi partikel. Kendalikan partikel bermuatan hanya dengan medan magnet dan kuasai gaya Lorentz.",
+    nPlay: "Main", nPlaySub: "Lanjut ke misi berikutnya",
+    nMis: "Misi", nMisSub: "Pilih misi atau boss",
+    nTut: "Latihan", nTutSub: "Belajar kontrol bersama Prof. Ion",
+    nLab: "Lab Desain", nLabSub: "Buat, uji, dan bagikan level buatanmu",
+    nBook: "Buku Fisika", nBookSub: "Rumus, diagram, penerapan nyata",
+    nSet: "Pengaturan", nSetSub: "Suara, bahasa, HUD, efek",
+    progress: "Progres misi", consts: "Konstanta lab", fact: "Tahukah kamu?",
+    feedLbl: "CAM-01 · RUANG DRIFT E×B", feedCap: "Langsung: muatan + dan − berputar berlawanan arah tetapi bergeser ke arah yang sama",
+    facts: [
+      "Aurora terjadi saat partikel bermuatan dari Matahari bergerak spiral mengikuti garis medan magnet Bumi lalu menabrak atmosfer atas.",
+      "Large Hadron Collider memakai 1232 magnet dipol superkonduktor (sekitar 8,3 T) untuk membelokkan proton di cincin sepanjang 27 km.",
+      "Magnet mesin MRI biasanya 1,5–3 T, puluhan ribu kali lebih kuat dari medan magnet Bumi (sekitar 50 μT).",
+      "TV tabung (CRT) zaman dulu memakai kumparan magnet untuk mengarahkan berkas elektron ke layar.",
+      "Pada siklotron, periode T = 2πm / (qB) tidak bergantung pada laju. Karena itu partikel bisa terus dipercepat secara berirama.",
+      "F = BIL pada kawat sebenarnya adalah F = qvB yang dijumlahkan untuk semua muatan yang bergerak di dalam kawat."
+    ],
+    back: "◀ Kembali", misTitle: "Pilih misi", misSub: "Pilih operasimu", sMain: "Misi utama", sBoss: "Boss", sCustom: "Misi buatan (Lab Desain)",
+    noCustom: "Belum ada misi buatan. Buat di Lab Desain!", locked: "TERKUNCI", best: "TERBAIK", play: "Main", edit: "Ubah",
+    setTitle: "Pengaturan", setSub: "Konfigurasi sistem",
+    sLang: "Bahasa", sSfx: "Efek suara", sMusic: "Musik", sSpeed: "Kecepatan game", sSpeedSub: "Mode lambat membuat belokan lebih mudah",
+    slow: "Lambat", normal: "Normal", fast: "Cepat",
+    sHud: "Tata letak HUD", sHudSub: "Lengkap menampilkan radar, osiloskop, dan meteran", full: "Lengkap", compact: "Ringkas",
+    sCircle: "Lingkaran belok", sCircleSub: "Lingkaran putus-putus dengan jari-jari r = mv/(|q|B)",
+    sVectors: "Panah gaya & kecepatan", sVectorsSub: "v hijau dan F merah pada partikel",
+    sShake: "Guncangan layar", sScan: "Garis CRT", sHq: "Efek kualitas tinggi", sHqSub: "Matikan di komputer yang lambat",
+    sTrail: "Gaya jejak", classic: "Klasik", rainbow: "Pelangi", fire: "Api", plasma: "Plasma",
+    sUnlock: "Buka semua misi", sUnlockSub: "Berguna saat presentasi di kelas",
+    sReset: "Atur ulang progres", sResetSub: "Menghapus bintang, waktu terbaik, dan misi yang terbuka", resetBtn: "Atur ulang", resetSure: "Klik lagi untuk konfirmasi",
+    bookTitle: "Buku Fisika", bookSub: "Buku panduan",
+    padL: "B masuk", padR: "B keluar", padLb: "B diperkuat", padRb: "B diperlemah",
+    mission: "Misi", briefing: "Pengarahan misi", start: "Mulai misi", orbs: "Orb", time: "Waktu", crashes: "Tabrakan", score: "Skor", scoreRule: "+100 per orb · +500 selesai · −100 tiap menabrak dinding", bestScore: "Skor terbaik",
+    goal: "Tujuan: kumpulkan orb lalu masuk ke portal keluar.",
+    crash: "Tabrakan! Gaya magnet tidak bisa mengerem. Beloklah lebih awal.",
+    accel: "⚡ Medan listrik melakukan usaha: laju ↑, jari-jari belok ↑",
+    decel: "⚡ Medan listrik memperlambat: laju ↓, jari-jari belok ↓",
+    flip: q => `± Muatan berubah: q sekarang ${q > 0 ? "positif (+)" : "negatif (−)"}`,
+    checkpoint: "✔ Checkpoint tersimpan",
+    complete: "Misi selesai", next: "Misi berikutnya", retry: "Ulangi", menu: "Menu utama", toBoss: "Hadapi boss",
+    finishTitle: "Semua misi selesai!", finishSub: "Kamu menguasai gaya Lorentz.", totalStars: "Total bintang",
+    summary: [
+      "F = q v × B selalu tegak lurus v, jadi partikel berbelok tetapi lajunya tidak berubah.",
+      "Gunakan kaidah tangan kanan untuk arah F. Untuk muatan negatif, arahnya berlawanan.",
+      "r = m v / (|q| B): partikel lebih cepat atau lebih berat berbelok lebih lebar, medan lebih kuat membuat belokan lebih tajam.",
+      "Medan listrik bisa mengubah laju (W = qV). Medan magnet tidak bisa (W = 0).",
+      "Siklotron bekerja karena T = 2πm/(qB) tidak bergantung pada laju."
+    ],
+    again: "Main lagi", paused: "Jeda", resume: "Lanjut", restart: "Ulangi", toLab: "Kembali ke Lab Desain",
+    tutDone: "Latihan selesai!", tutDoneText: "Kamu sudah bisa mengendalikan partikel. Sekarang kita pelajari fisikanya, satu misi demi satu misi.", toLevel1: "Mulai Misi 1",
+    nextBtn: "Lanjut ▶", profSays: "Prof. Ion",
+    dMaxV: "Laju maks", dMaxF: "Gaya maks", dDist: "Jarak", dField: "Medan aktif", dBest: "Waktu terbaik", dHits: "Kena ion", dKicks: "Dorongan",
+    newBest: "REKOR BARU!",
+    kick: "⚡ DORONG! Laju ↑", ready: "SIAP", hit: "Kena ion! Laju ↓", extraction: "Siap keluar: tahan ▶ untuk melemahkan B dan memperlebar orbit!",
+    bossWin: "Inti jebol!", phase: "FASE",
+    edTitle: "Lab Desain", edSub: "Editor level", edTools: "Alat", edName: "Nama misi", edTheme: "Tema",
+    edCheck: "Pemeriksaan", edStart: "Titik awal", edPortal: "Portal keluar", edOrbs: "Orb",
+    edTest: "Uji", edSave: "Simpan", edNew: "Bersihkan", edShare: "Kode bagikan", edImport: "Muat kode", edCopy: "Salin", edLoad: "Muat",
+    edSaved: "Misi tersimpan", edNone: "Belum ada yang disimpan.", edDel: "Hapus", edSureDel: "Yakin?",
+    edHint: "Tahan klik kiri untuk menggambar · klik kanan untuk menghapus · dinding tepi tidak bisa diubah. Gambar gerbang sebagai satu kolom penuh melintasi lorong.",
+    edNeed: "Letakkan titik awal dan minimal satu portal keluar dulu.",
+    edSavedMsg: "Misi tersimpan!", edCopied: "Kode disalin!", edBad: "Kode tidak valid.", edLoaded: "Misi dimuat!",
+    tools: { "#": "Dinding", ".": "Hapus", "S": "Titik awal", "E": "Portal keluar", "o": "Orb", "C": "Checkpoint", "A": "Gerbang laju +", "D": "Gerbang laju −", "F": "Gerbang balik muatan" },
+    untitled: "Misi tanpa nama", custom: "Buatan"
+  }
+};
+const T = k => TXT[SET.lang][k];
+
+// =====================================================================
+//  THEMES
+// =====================================================================
+const THEMES = [
+  { name: "Deep Space", top: "#050a1c", bot: "#0b1633", neb: ["#1d4ed8", "#0891b2", "#4338ca"], steel: ["#2a3447", "#161d2b"], edge: "#7dd3fc", dust: "#93c5fd",
+    planets: [{ fx: .82, fy: .25, r: 70, c1: "#93c5fd", c2: "#1e3a8a", ring: "#bfdbfe" }] },
+  { name: "Cyan Nebula", top: "#030d1a", bot: "#06213a", neb: ["#0e7490", "#2563eb", "#7c3aed"], steel: ["#25384a", "#132231"], edge: "#22d3ee", dust: "#67e8f9",
+    planets: [{ fx: .8, fy: .22, r: 90, c1: "#f9a8d4", c2: "#7e22ce", ring: "#f5d0fe" }, { fx: .15, fy: .8, r: 26, c1: "#fde68a", c2: "#b45309" }] },
+  { name: "Magenta Storm", top: "#12041a", bot: "#24082e", neb: ["#a21caf", "#db2777", "#6d28d9"], steel: ["#382a45", "#1e1428"], edge: "#f0abfc", dust: "#f5d0fe",
+    planets: [{ fx: .78, fy: .3, r: 110, c1: "#fcd34d", c2: "#c2410c" }, { fx: .2, fy: .18, r: 30, c1: "#a5f3fc", c2: "#0e7490" }] },
+  { name: "Emerald Reactor", top: "#02130e", bot: "#062a1f", neb: ["#047857", "#0d9488", "#65a30d"], steel: ["#26403a", "#13221e"], edge: "#4ade80", dust: "#bbf7d0",
+    planets: [{ fx: .84, fy: .24, r: 80, c1: "#7dd3fc", c2: "#1e40af", ring: "#a7f3d0" }] },
+  { name: "Solar Flare", top: "#170703", bot: "#2a0e05", neb: ["#c2410c", "#b91c1c", "#a16207"], steel: ["#443026", "#241912"], edge: "#fdba74", dust: "#fed7aa",
+    planets: [{ fx: .8, fy: .26, r: 120, c1: "#fef08a", c2: "#ea580c", sun: true }, { fx: .12, fy: .7, r: 22, c1: "#cbd5e1", c2: "#334155" }] },
+  { name: "Cyclotron Core", top: "#0d0410", bot: "#1d0612", neb: ["#be123c", "#7c3aed", "#ea580c"], steel: ["#40303a", "#1f161c"], edge: "#fb7185", dust: "#fecdd3",
+    planets: [{ fx: .12, fy: .2, r: 60, c1: "#fda4af", c2: "#881337", ring: "#fecdd3" }] }
+];
+
+// =====================================================================
+//  LEVELS (1 cell = 1 metre)
+//  # wall · S start · o orb · E portal · C checkpoint · A speed+ · D speed− · F charge flip
+// =====================================================================
+const TUT_MAP = (() => {
+  const w = 30, h = 18, rows = [];
+  for (let y = 0; y < h; y++) { let r = ""; for (let x = 0; x < w; x++) r += (x === 0 || y === 0 || x === w - 1 || y === h - 1) ? "#" : "."; rows.push(r.split("")); }
+  rows[9][2] = "S"; rows[4][15] = "o"; rows[13][22] = "o"; rows[14][8] = "o";
+  rows[8][24] = rows[8][25] = rows[9][24] = rows[9][25] = "E";
+  return rows.map(r => r.join(""));
+})();
+const TUTORIAL = { theme: 0, B: 2, v: 3, q: 2, m: 2, map: TUT_MAP };
+
+const TUT_STEPS = [
+  { kind: "btn", en: "Hi, I'm <b>Prof. Ion</b>! The glowing ball is a <b>positive charge</b>. It's always moving, and you steer it using magnetic fields.",
+    id: "Halo, aku <b>Prof. Ion</b>! Bola bercahaya itu adalah <b>muatan positif</b>. Ia selalu bergerak, dan kamu mengendalikannya dengan medan magnet." },
+  { kind: "holdL", en: "Hold <b>◀ / A</b> to switch on B ⊗ (into the screen). The red arrow is the force F. It points sideways, so you turn <b>left</b>.",
+    id: "Tahan <b>◀ / A</b> untuk menyalakan B ⊗ (masuk layar). Panah merah adalah gaya F. Arahnya ke samping, jadi kamu belok <b>kiri</b>." },
+  { kind: "holdR", en: "Now hold <b>▶ / D</b> for B ⊙ (out of the screen). The force flips, so you turn <b>right</b>.",
+    id: "Sekarang tahan <b>▶ / D</b> untuk B ⊙ (keluar layar). Gayanya berbalik, jadi kamu belok <b>kanan</b>." },
+  { kind: "free", en: "Let go of both buttons. With B = 0 there's no force, so the particle flies <b>straight</b> (Newton's first law).",
+    id: "Lepaskan kedua tombol. Saat B = 0 tidak ada gaya, jadi partikel bergerak <b>lurus</b> (Hukum I Newton)." },
+  { kind: "btn", en: "Did you notice? The speed stayed <b>3.0 m/s</b> the whole time (check the gauge). The magnetic force only changes direction, never speed.",
+    id: "Kamu sadar? Lajunya tetap <b>3,0 m/s</b> sepanjang waktu (lihat meterannya). Gaya magnet hanya mengubah arah, tidak pernah mengubah laju." },
+  { kind: "orbs", en: "Collect the <b>3 golden orbs</b>. Tip: the dashed circle shows exactly where you'll turn.",
+    id: "Kumpulkan <b>3 orb emas</b>. Tips: lingkaran putus-putus menunjukkan tepat ke mana kamu akan berbelok." },
+  { kind: "portal", en: "Excellent! Now fly into the <b>exit portal</b> to finish training.",
+    id: "Hebat! Sekarang masuk ke <b>portal keluar</b> untuk menyelesaikan latihan." }
+];
+
+const LEVELS = [
+  {
+    theme: 1, B: 2, v: 3, q: 2, m: 2, formula: "F = q v B", diff: 1,
+    map: [
+      "################################",
+      "#..............................#",
+      "#..o.....o.........o.......EE..#",
+      "#..........................EE..#",
+      "#.......####.........o.........#",
+      "#..o....####...................#",
+      "#.......####.......#####.......#",
+      "#S.........o.......#####...o...#",
+      "#..................#####.......#",
+      "#....o.........o...............#",
+      "#.........####.................#",
+      "#...o.....####......o......o...#",
+      "#..............................#",
+      "################################"
+    ],
+    en: { name: "The force that only turns", chips: ["F ⊥ v", "W = 0", "circular path"],
+      lesson: ["A charge moving through a magnetic field feels the <b>Lorentz force</b>.",
+        "F is always <b>perpendicular</b> to the velocity v. It bends the path, but it can't speed the particle up or slow it down.",
+        "Inside the field the particle moves along a <b>circle</b>."],
+      prof: "Think of the force as a steering wheel, not a gas pedal!" },
+    id: { name: "Gaya yang hanya membelokkan", chips: ["F ⊥ v", "W = 0", "lintasan melingkar"],
+      lesson: ["Muatan yang bergerak di dalam medan magnet mengalami <b>gaya Lorentz</b>.",
+        "F selalu <b>tegak lurus</b> kecepatan v. Lintasannya berbelok, tetapi lajunya tidak bertambah atau berkurang.",
+        "Di dalam medan, partikel bergerak melingkar."],
+      prof: "Anggap gaya ini seperti setir, bukan pedal gas!" }
+  },
+  {
+    theme: 2, B: 2, v: 3, q: 2, m: 2, formula: "r = m v / (|q| B)", diff: 2,
+    map: [
+      "##############################",
+      "#EE..........................#",
+      "#EE.....o.........o..........#",
+      "#EE..........................#",
+      "#EE..........................#",
+      "#EE..........................#",
+      "#######################......#",
+      "#######################......#",
+      "#............................#",
+      "#....o..........o.........o..#",
+      "#.............C..............#",
+      "#............................#",
+      "#............................#",
+      "#......#######################",
+      "#......#######################",
+      "#............................#",
+      "#............................#",
+      "#S......o.........o......o...#",
+      "#............................#",
+      "#............................#",
+      "##############################"
+    ],
+    en: { name: "Right-hand rule", chips: ["right-hand rule", "r = mv/qB"],
+      lesson: ["For a <b>positive</b> charge: point your fingers along v, curl them toward B, and your thumb shows F.",
+        "Moving right with B ⊗ (into the screen), F points <b>up</b>, so you turn left. With B ⊙, you turn right.",
+        "The dashed circle shows your turning path. Its radius is <b>r = m v / (|q| B)</b>."],
+      prof: "In this game, r = (2 g × 3 m/s) / (2 mC × 2 T) = 1.5 m. Check the telemetry panel!" },
+    id: { name: "Kaidah tangan kanan", chips: ["kaidah tangan kanan", "r = mv/qB"],
+      lesson: ["Untuk muatan <b>positif</b>: arahkan jari-jari sesuai v, tekuk ke arah B, ibu jari menunjukkan F.",
+        "Bergerak ke kanan dengan B ⊗ (masuk layar), F mengarah <b>ke atas</b>, jadi belok kiri. Dengan B ⊙, belok kanan.",
+        "Lingkaran putus-putus menunjukkan lintasan belokmu. Jari-jarinya <b>r = m v / (|q| B)</b>."],
+      prof: "Di game ini, r = (2 g × 3 m/s) / (2 mC × 2 T) = 1,5 m. Cek di panel telemetri!" }
+  },
+  {
+    theme: 3, B: 2, v: 3, q: 2, m: 2, formula: "r ∝ v", diff: 3,
+    map: [
+      "##########################################",
+      "#........................................#",
+      "#..........A.............................#",
+      "#S....o....A......o.......o.......o......#",
+      "#..........A.............................#",
+      "#..........A.............................#",
+      "#..........A.............................#",
+      "##################################.......#",
+      "##################################.......#",
+      "#EE......................................#",
+      "#EE..........D...........................#",
+      "#EE....o.....D......o........o.....C.....#",
+      "#EE..........D...........................#",
+      "#EE..........D...........................#",
+      "#EE..........D...........................#",
+      "##########################################"
+    ],
+    en: { name: "Faster means wider turns", chips: ["W = qV", "r ∝ v"],
+      lesson: ["<b style='color:#5dff9e'>Green gates</b> hold an <b>electric</b> field. It does work on the charge (W = qV), so the speed increases.",
+        "From r = m v / (|q| B): a <b>larger v</b> gives a <b>larger r</b>, so you need to start turning earlier.",
+        "<b style='color:#c084fc'>Purple gates</b> slow you down again."],
+      prof: "Electric fields can push. Magnetic fields can only steer." },
+    id: { name: "Makin cepat, belokan makin lebar", chips: ["W = qV", "r ∝ v"],
+      lesson: ["<b style='color:#5dff9e'>Gerbang hijau</b> berisi medan <b>listrik</b>. Medan ini melakukan usaha pada muatan (W = qV), jadi lajunya bertambah.",
+        "Dari r = m v / (|q| B): <b>v lebih besar</b> berarti <b>r lebih besar</b>, jadi mulailah berbelok lebih awal.",
+        "<b style='color:#c084fc'>Gerbang ungu</b> memperlambat lagi."],
+      prof: "Medan listrik bisa mendorong. Medan magnet hanya bisa membelokkan." }
+  },
+  {
+    theme: 4, B: 2, v: 3, q: 2, m: 2, formula: "F = q v × B", diff: 3,
+    map: [
+      "################################",
+      "#EE............F...........o...#",
+      "#EE............F...............#",
+      "#EE.....o......F.......o.......#",
+      "#EE............F...............#",
+      "#EE............F...............#",
+      "#########################......#",
+      "#########################......#",
+      "#..............F...............#",
+      "#...o..........F......o........#",
+      "#..............F...............#",
+      "#..............F........C......#",
+      "#..............F...............#",
+      "#......#########################",
+      "#......#########################",
+      "#..............................#",
+      "#..............................#",
+      "#S.......o.........o.......o...#",
+      "#..............................#",
+      "#..............................#",
+      "################################"
+    ],
+    en: { name: "Negative charge", chips: ["−q", "F reverses"],
+      lesson: ["<b style='color:#f472b6'>Pink gates</b> flip the particle's charge between + and −.",
+        "For a <b>negative</b> charge the force F = q v × B points the <b>opposite</b> way, so the same button now turns you the other way!",
+        "Watch the q indicator on the top bar."],
+      prof: "Electrons are negative, so they always curve the opposite way from protons." },
+    id: { name: "Muatan negatif", chips: ["−q", "F berbalik"],
+      lesson: ["<b style='color:#f472b6'>Gerbang merah muda</b> mengubah muatan partikel antara + dan −.",
+        "Untuk muatan <b>negatif</b>, gaya F = q v × B berarah <b>berlawanan</b>, jadi tombol yang sama sekarang membelokkan ke arah sebaliknya!",
+        "Perhatikan indikator q di bilah atas."],
+      prof: "Elektron bermuatan negatif, jadi selalu melengkung berlawanan arah dengan proton." }
+  }
+];
+
+const BOSS = {
+  theme: 5, B: 2, v: 2, q: 2, m: 2, formula: "T = 2π m / (|q| B)", diff: 5, R: 6.6, gap: .38, vTarget: 10,
+  en: { name: "The Cyclotron Core", chips: ["cyclotron", "T = 2πm/qB", "spiral"],
+    lesson: ["You're inside a <b>cyclotron</b>. A constant field B ⊗ keeps you circling automatically.",
+      "Each time you cross the glowing <b>gap</b>, press <b>KICK</b> (Space or the ⚡ button). The electric field does work, so speed ↑ and radius ↑. Your path becomes a <b>spiral</b>!",
+      "The cyclotron trick: <b>T = 2πm/(qB)</b> doesn't depend on speed, so you reach the gap in the same rhythm no matter how fast you go.",
+      "Dodge the ion bursts by trimming B: <b>◀ stronger B = tighter orbit</b>, <b>▶ weaker B = wider orbit</b>. Reach 10 m/s, then weaken B to break out!"],
+    prof: "This is how real particle accelerators for cancer therapy work!" },
+  id: { name: "Inti Siklotron", chips: ["siklotron", "T = 2πm/qB", "spiral"],
+    lesson: ["Kamu berada di dalam <b>siklotron</b>. Medan B ⊗ yang konstan membuatmu berputar secara otomatis.",
+      "Setiap kali melewati <b>celah</b> yang bercahaya, tekan <b>DORONG</b> (Spasi atau tombol ⚡). Medan listrik melakukan usaha, jadi laju ↑ dan jari-jari ↑. Lintasanmu menjadi <b>spiral</b>!",
+      "Rahasia siklotron: <b>T = 2πm/(qB)</b> tidak bergantung pada laju, jadi kamu sampai di celah dengan irama yang sama seberapa pun cepatnya.",
+      "Hindari semburan ion dengan mengatur B: <b>◀ B lebih kuat = orbit lebih sempit</b>, <b>▶ B lebih lemah = orbit lebih lebar</b>. Capai 10 m/s, lalu lemahkan B untuk keluar!"],
+    prof: "Begini cara kerja akselerator partikel sungguhan untuk terapi kanker!" }
+};
+
+// =====================================================================
+//  PHYSICS
+//  Screen coordinates (y down). B along z: negative = ⊗ into screen, positive = ⊙ out.
+//  F = q·B·(−vy, vx). Each step rotates v by (q·B/m)·dt, which keeps |v| exactly
+//  constant, because the magnetic force does no work.
+// =====================================================================
+function rotateVelocity(p, B, dt) {
+  const phi = (p.q * B / p.m) * dt, c = Math.cos(phi), s = Math.sin(phi);
+  const vx = p.vx * c - p.vy * s, vy = p.vx * s + p.vy * c;
+  p.vx = vx; p.vy = vy;
+}
+const forceVec = (p, B) => [p.q * B * -p.vy, p.q * B * p.vx];   // mC·T·m/s = mN
+const speed = p => Math.hypot(p.vx, p.vy);
+const radius = (p, B) => B === 0 ? Infinity : p.m * speed(p) / (Math.abs(p.q) * Math.abs(B));
+const setSpeed = (p, v) => { const s = speed(p); p.vx *= v / s; p.vy *= v / s; };
+
+// =====================================================================
+//  ART (all drawn in code)
+// =====================================================================
+let svgN = 0;
+function mascotSVG(extra = "") {
+  const n = ++svgN;
+  return `<svg class="mascot" ${extra} viewBox="0 0 120 130" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <radialGradient id="mB${n}" cx="35%" cy="30%"><stop offset="0" stop-color="#a5f3fc"/><stop offset=".55" stop-color="#3b82f6"/><stop offset="1" stop-color="#1e1b4b"/></radialGradient>
+      <radialGradient id="mT${n}" cx="40%" cy="35%"><stop offset="0" stop-color="#fecaca"/><stop offset="1" stop-color="#ef4444"/></radialGradient>
+      <linearGradient id="mR${n}" x1="0" x2="1"><stop offset="0" stop-color="#4fd6ff"/><stop offset="1" stop-color="#f472b6"/></linearGradient>
+    </defs>
+    <ellipse cx="60" cy="122" rx="30" ry="5" fill="#000" opacity=".35"/>
+    <g class="orb"><ellipse cx="60" cy="64" rx="54" ry="16" fill="none" stroke="url(#mR${n})" stroke-width="2.5" opacity=".55" transform="rotate(-20 60 64)"/><circle cx="112" cy="50" r="5" fill="#4dd8ff"/></g>
+    <line x1="60" y1="32" x2="60" y2="14" stroke="#cbd5e1" stroke-width="3"/>
+    <circle cx="60" cy="11" r="8" fill="url(#mT${n})"/><text x="60" y="15" text-anchor="middle" font-size="12" font-weight="900" fill="#fff" font-family="system-ui">+</text>
+    <circle cx="25" cy="66" r="7" fill="#1e40af"/><circle cx="95" cy="66" r="7" fill="#1e40af"/>
+    <circle cx="60" cy="66" r="36" fill="url(#mB${n})" stroke="#bae6fd" stroke-width="1.5"/>
+    <rect x="35" y="50" width="50" height="30" rx="14" fill="#0b1220"/>
+    <ellipse class="eye" cx="49" cy="63" rx="5" ry="6.5" fill="#5cf2ff"/><ellipse class="eye" cx="71" cy="63" rx="5" ry="6.5" fill="#5cf2ff"/>
+    <circle cx="51" cy="60.5" r="1.6" fill="#fff"/><circle cx="73" cy="60.5" r="1.6" fill="#fff"/>
+    <path d="M52 73 Q60 78 68 73" stroke="#5cf2ff" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+    <circle cx="40" cy="74" r="3.5" fill="#f472b6" opacity=".5"/><circle cx="80" cy="74" r="3.5" fill="#f472b6" opacity=".5"/>
+    <rect x="44" y="100" width="12" height="16" rx="5" fill="#1e40af"/><rect x="64" y="100" width="12" height="16" rx="5" fill="#1e40af"/>
+    <g class="orb" style="animation-duration:9s;animation-direction:reverse"><ellipse cx="60" cy="64" rx="54" ry="16" fill="none" stroke="url(#mR${n})" stroke-width="2.5" opacity=".9" stroke-dasharray="80 260" transform="rotate(-20 60 64)"/></g>
+  </svg>`;
+}
+function atomLogo() {
+  return `<svg viewBox="0 0 100 100"><defs><radialGradient id="lg"><stop offset="0" stop-color="#fff"/><stop offset=".4" stop-color="#4fd6ff"/><stop offset="1" stop-color="#4fd6ff" stop-opacity="0"/></radialGradient></defs>
+    <g fill="none" stroke-width="3">
+      <ellipse cx="50" cy="50" rx="44" ry="15" stroke="#4fd6ff"><animateTransform attributeName="transform" type="rotate" from="0 50 50" to="360 50 50" dur="9s" repeatCount="indefinite"/></ellipse>
+      <ellipse cx="50" cy="50" rx="44" ry="15" stroke="#a78bfa" transform="rotate(60 50 50)"><animateTransform attributeName="transform" type="rotate" from="60 50 50" to="420 50 50" dur="12s" repeatCount="indefinite"/></ellipse>
+      <ellipse cx="50" cy="50" rx="44" ry="15" stroke="#f472b6" transform="rotate(120 50 50)"><animateTransform attributeName="transform" type="rotate" from="120 50 50" to="480 50 50" dur="15s" repeatCount="indefinite"/></ellipse>
+    </g><circle cx="50" cy="50" r="16" fill="url(#lg)"/><circle cx="50" cy="50" r="7" fill="#fff"/></svg>`;
+}
+function svgDefs() {
+  const n = ++svgN;
+  return { n, d: `<defs>
+  <marker id="ag${n}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0L10,5L0,10z" fill="#5dff9e"/></marker>
+  <marker id="ar${n}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0L10,5L0,10z" fill="#ff5d5d"/></marker>
+  <marker id="ab${n}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0L10,5L0,10z" fill="#5b86ff"/></marker>
+  <marker id="aw${n}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0L10,5L0,10z" fill="#cbd5e1"/></marker>
+  <marker id="ay${n}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0L10,5L0,10z" fill="#ffb547"/></marker>
+  <radialGradient id="gP${n}" cx="35%" cy="35%"><stop offset="0" stop-color="#fff"/><stop offset=".4" stop-color="#ff8a8a"/><stop offset="1" stop-color="#dc2626"/></radialGradient>
+  <linearGradient id="gS${n}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0b1633"/><stop offset="1" stop-color="#050a1c"/></linearGradient>
+  <pattern id="gr${n}" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0H0V20" fill="none" stroke="rgba(120,150,210,.08)"/></pattern>
+</defs>` };
+}
+const svgText = (x, y, t, c, s = 15, w = 700) => `<text x="${x}" y="${y}" fill="${c}" font-size="${s}" font-weight="${w}" font-family="Rajdhani,Inter,system-ui">${t}</text>`;
+const crossMark = (x, y, c, r = 5) => `<g stroke="${c}" stroke-width="2"><line x1="${x - r}" y1="${y - r}" x2="${x + r}" y2="${y + r}"/><line x1="${x + r}" y1="${y - r}" x2="${x - r}" y2="${y + r}"/></g>`;
+const fieldGrid = (c, w = 440, h = 200) => { let s = ""; for (let x = 30; x < w; x += 50) for (let y = 25; y < h; y += 45) s += crossMark(x, y, c); return s; };
+const frame = (D, w, h) => `<rect width="${w}" height="${h}" fill="url(#gS${D.n})"/><rect width="${w}" height="${h}" fill="url(#gr${D.n})"/>`;
+const M = (D, k) => `url(#a${k}${D.n})`;
+
+function lessonSVG(i) {
+  const D = svgDefs(), o = `<svg class="ill" viewBox="0 0 440 200">${D.d}${frame(D, 440, 200)}`, P = `url(#gP${D.n})`;
+  if (i === 0) return `${o}${fieldGrid("rgba(91,134,255,.4)")}
+    <circle cx="220" cy="118" r="62" fill="none" stroke="#ff6b6b" stroke-dasharray="6 6" opacity=".6"/>
+    <line x1="220" y1="180" x2="305" y2="180" stroke="#5dff9e" stroke-width="4" marker-end="${M(D, "g")}"/>
+    <line x1="220" y1="180" x2="220" y2="112" stroke="#ff5d5d" stroke-width="4" marker-end="${M(D, "r")}"/>
+    <circle cx="220" cy="180" r="10" fill="${P}"/>${svgText(310, 186, "v", "#5dff9e", 18)}${svgText(228, 120, "F", "#ff5d5d", 18)}
+    ${svgText(310, 110, "F ⊥ v", "#e3e9f5", 22)}${svgText(14, 20, "B ⊗", "#7da2ff", 16)}</svg>`;
+  if (i === 1) return `${o}${fieldGrid("rgba(91,134,255,.4)")}
+    <line x1="140" y1="130" x2="255" y2="130" stroke="#5dff9e" stroke-width="5" marker-end="${M(D, "g")}"/>
+    <line x1="140" y1="130" x2="140" y2="40" stroke="#ff5d5d" stroke-width="5" marker-end="${M(D, "r")}"/>
+    <circle cx="140" cy="130" r="11" fill="${P}"/>
+    <circle cx="320" cy="85" r="28" fill="rgba(91,134,255,.15)" stroke="#5b86ff" stroke-width="3"/>${crossMark(320, 85, "#7da2ff", 9)}
+    ${svgText(262, 136, "v", "#5dff9e", 20)}${svgText(150, 50, "F", "#ff5d5d", 20)}${svgText(304, 138, "B", "#7da2ff", 20)}
+    ${svgText(120, 182, "v × B → F", "#e3e9f5", 18)}</svg>`;
+  if (i === 2) return `${o}${fieldGrid("rgba(91,134,255,.28)")}
+    <circle cx="125" cy="105" r="42" fill="none" stroke="#ff6b6b" stroke-width="3"/>
+    <circle cx="310" cy="105" r="64" fill="none" stroke="#ff6b6b" stroke-width="3"/>
+    <line x1="125" y1="105" x2="167" y2="105" stroke="#cbd5e1" stroke-dasharray="4 4"/><line x1="310" y1="105" x2="374" y2="105" stroke="#cbd5e1" stroke-dasharray="4 4"/>
+    ${svgText(135, 98, "r", "#e3e9f5", 17)}${svgText(325, 98, "1.5 r", "#e3e9f5", 17)}
+    ${svgText(100, 185, "v", "#5dff9e", 19)}${svgText(290, 192, "1.5 v", "#5dff9e", 19)}</svg>`;
+  if (i === 3) return `${o}${fieldGrid("rgba(91,134,255,.4)")}
+    <path d="M40 100 L170 100 A62 62 0 0 0 232 38" fill="none" stroke="#ff6b6b" stroke-width="3.5"/>
+    <path d="M40 100 L170 100 A62 62 0 0 1 232 162" fill="none" stroke="#4dd8ff" stroke-width="3.5"/>
+    <circle cx="40" cy="100" r="11" fill="${P}"/>
+    ${svgText(242, 44, "+q", "#ff8a8a", 20)}${svgText(242, 170, "−q", "#7ee7ff", 20)}${svgText(290, 106, "F = q v × B", "#e3e9f5", 18)}</svg>`;
+  // boss: cyclotron spiral
+  let sp = "M220 108"; for (let k = 1; k <= 8; k++) sp += ` a${k * 9} ${k * 9} 0 0 ${k % 2 ? 1 : 1} 0 ${k % 2 ? -k * 18 + 9 : k * 18 - 9}`;
+  return `${o}
+    <path d="M214 16 A86 86 0 0 0 214 188 Z" fill="rgba(251,113,133,.12)" stroke="#fb7185" stroke-width="2"/>
+    <path d="M226 16 A86 86 0 0 1 226 188 Z" fill="rgba(79,214,255,.12)" stroke="#4fd6ff" stroke-width="2"/>
+    <rect x="214" y="16" width="12" height="172" fill="rgba(93,255,158,.18)"/>
+    <path d="M220 100 a8 8 0 0 1 0 16 a16 16 0 0 1 0 -32 a24 24 0 0 1 0 48 a32 32 0 0 1 0 -64 a40 40 0 0 1 0 80 a48 48 0 0 1 0 -96 a56 56 0 0 1 0 112 a64 64 0 0 1 0 -128 a72 72 0 0 1 0 144" fill="none" stroke="#facc15" stroke-width="2.2"/>
+    ${svgText(320, 40, "T = 2πm/qB", "#e3e9f5", 17)}${svgText(330, 180, "B ⊗", "#7da2ff", 16)}${svgText(234, 196, "E (gap)", "#5dff9e", 13)}</svg>`;
+}
+
+function bookSVG(k) {
+  const D = svgDefs(), P = `url(#gP${D.n})`, o = (w, h) => `<svg viewBox="0 0 ${w} ${h}">${D.d}${frame(D, w, h)}`;
+  if (k === "force") return `${o(440, 260)}
+    <line x1="120" y1="190" x2="330" y2="190" stroke="#5dff9e" stroke-width="5" marker-end="${M(D, "g")}"/>
+    <line x1="120" y1="190" x2="240" y2="100" stroke="#5b86ff" stroke-width="5" marker-end="${M(D, "b")}"/>
+    <path d="M175 190 A55 55 0 0 0 164 157" fill="none" stroke="#ffb547" stroke-width="2.5"/>
+    <line x1="120" y1="190" x2="120" y2="40" stroke="#ff5d5d" stroke-width="5" marker-end="${M(D, "r")}"/>
+    <circle cx="120" cy="190" r="12" fill="${P}"/>
+    ${svgText(338, 196, "v", "#5dff9e", 21)}${svgText(246, 100, "B", "#7da2ff", 21)}${svgText(130, 46, "F", "#ff5d5d", 21)}${svgText(182, 176, "θ", "#ffb547", 19)}
+    ${svgText(250, 236, "|F| = |q| v B sin θ", "#e3e9f5", 17)}</svg>`;
+  if (k === "rhr") return `${o(440, 260)}
+    <g transform="translate(220 140)">
+      <line x1="0" y1="0" x2="150" y2="0" stroke="#5dff9e" stroke-width="5" marker-end="${M(D, "g")}"/>
+      <line x1="0" y1="0" x2="0" y2="-110" stroke="#ff5d5d" stroke-width="5" marker-end="${M(D, "r")}"/>
+      <line x1="0" y1="0" x2="-95" y2="70" stroke="#5b86ff" stroke-width="5" marker-end="${M(D, "b")}"/>
+      <circle r="10" fill="${P}"/>
+      ${svgText(158, 6, "v (fingers)", "#5dff9e", 16)}${svgText(10, -112, "F (thumb)", "#ff5d5d", 16)}${svgText(-205, 92, "B (curl toward)", "#7da2ff", 16)}
+    </g>
+    ${svgText(16, 28, "RIGHT HAND · POSITIVE CHARGE", "#e3e9f5", 15)}${svgText(16, 248, "negative charge → F is reversed", "#8796b0", 14, 600)}</svg>`;
+  if (k === "circle") return `${o(440, 260)}${fieldGrid("rgba(91,134,255,.3)", 440, 260)}
+    <circle cx="220" cy="130" r="90" fill="none" stroke="#ff6b6b" stroke-width="3" stroke-dasharray="8 6"/>
+    <line x1="220" y1="130" x2="310" y2="130" stroke="#cbd5e1" stroke-width="2"/>${svgText(255, 122, "r", "#e3e9f5", 19)}
+    <circle cx="220" cy="130" r="4" fill="#cbd5e1"/>
+    <g transform="translate(220 40)"><circle r="11" fill="${P}"/>
+      <line x1="0" y1="0" x2="-80" y2="0" stroke="#5dff9e" stroke-width="4" marker-end="${M(D, "g")}"/>
+      <line x1="0" y1="0" x2="0" y2="55" stroke="#ff5d5d" stroke-width="4" marker-end="${M(D, "r")}"/>
+      ${svgText(-92, -10, "v", "#5dff9e", 19)}${svgText(8, 50, "F", "#ff5d5d", 19)}</g>
+    ${svgText(14, 248, "F always points to the centre → centripetal force", "#e3e9f5", 15, 600)}</svg>`;
+  if (k === "wire") return `${o(440, 260)}${fieldGrid("rgba(91,134,255,.3)", 440, 260)}
+    <rect x="40" y="150" width="360" height="26" rx="13" fill="#b45309" stroke="#fbbf24" stroke-width="2"/>
+    ${[80, 140, 200, 260, 320].map(x => `<circle cx="${x}" cy="163" r="6" fill="${P}"/><line x1="${x + 8}" y1="163" x2="${x + 30}" y2="163" stroke="#5dff9e" stroke-width="2" marker-end="${M(D, "g")}"/>`).join("")}
+    <line x1="400" y1="200" x2="330" y2="200" stroke="#ffb547" stroke-width="3" marker-end="${M(D, "y")}" transform="rotate(180 365 200)"/>
+    <line x1="220" y1="148" x2="220" y2="60" stroke="#ff5d5d" stroke-width="6" marker-end="${M(D, "r")}"/>
+    ${svgText(230, 72, "F = B I L", "#ff8a8a", 20)}${svgText(372, 222, "I", "#ffb547", 19)}${svgText(30, 230, "each charge: F = qvB  →  sum of all charges: F = BIL", "#e3e9f5", 14, 600)}
+    ${svgText(14, 24, "B ⊗", "#7da2ff", 16)}</svg>`;
+  if (k === "aurora") return `<svg viewBox="0 0 440 240">${D.d}
+    <defs><radialGradient id="earth${D.n}" cx="40%" cy="35%"><stop offset="0" stop-color="#7dd3fc"/><stop offset=".6" stop-color="#2563eb"/><stop offset="1" stop-color="#0b1a4a"/></radialGradient>
+    <radialGradient id="sun${D.n}"><stop offset="0" stop-color="#fff7cc"/><stop offset=".4" stop-color="#fbbf24"/><stop offset="1" stop-color="#f97316" stop-opacity="0"/></radialGradient>
+    <linearGradient id="aur${D.n}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4ade80" stop-opacity="0"/><stop offset="1" stop-color="#4ade80" stop-opacity=".9"/></linearGradient></defs>
+    <rect width="440" height="240" fill="#040817"/><circle cx="20" cy="120" r="90" fill="url(#sun${D.n})"/>
+    ${[0, 1, 2, 3, 4].map(i => `<path d="M90 ${70 + i * 25} q40 -6 80 0" stroke="#fbbf24" stroke-width="1.5" fill="none" opacity=".6" stroke-dasharray="4 6"/>`).join("")}
+    ${[40, 70, 100].map(r => `<path d="M290 74 C ${290 - r * 2.2} ${120 - r * 2.2}, ${290 - r * 2.2} ${120 + r * 2.2}, 290 166" stroke="#a78bfa" stroke-width="1.5" fill="none" opacity=".55"/><path d="M290 74 C ${290 + r * 2.2} ${120 - r * 2.2}, ${290 + r * 2.2} ${120 + r * 2.2}, 290 166" stroke="#a78bfa" stroke-width="1.5" fill="none" opacity=".55"/>`).join("")}
+    <circle cx="290" cy="120" r="46" fill="url(#earth${D.n})"/>
+    <path d="M262 84 q28 -22 56 0" stroke="url(#aur${D.n})" stroke-width="9" fill="none"/>
+    ${svgText(70, 228, "Solar wind", "#fbbf24", 14)}${svgText(300, 228, "Earth's field", "#c4b5fd", 14)}</svg>`;
+  if (k === "cyclotron") return `${o(440, 240)}
+    <path d="M214 30 A95 95 0 0 0 214 220 Z" fill="rgba(79,214,255,.12)" stroke="#4fd6ff" stroke-width="2"/>
+    <path d="M226 30 A95 95 0 0 1 226 220 Z" fill="rgba(244,114,182,.12)" stroke="#f472b6" stroke-width="2"/>
+    <path d="M220 125 a8 8 0 0 1 0 -16 a16 16 0 0 1 0 32 a24 24 0 0 1 0 -48 a32 32 0 0 1 0 64 a40 40 0 0 1 0 -80 a48 48 0 0 1 0 96 a56 56 0 0 1 0 -112 a64 64 0 0 1 0 128 a72 72 0 0 1 0 -144" fill="none" stroke="#facc15" stroke-width="2.2"/>
+    <line x1="220" y1="26" x2="380" y2="26" stroke="#facc15" stroke-width="2.2" marker-end="${M(D, "w")}"/>
+    ${svgText(20, 232, "D-shaped electrodes · B ⊗ everywhere", "#8796b0", 14, 600)}</svg>`;
+  if (k === "spectro") return `${o(440, 240)}${fieldGrid("rgba(91,134,255,.25)", 440, 200)}
+    <rect x="0" y="200" width="440" height="8" fill="#334155"/>
+    <path d="M60 200 A60 60 0 0 1 180 200" stroke="#ff6b6b" stroke-width="3" fill="none"/>
+    <path d="M60 200 A90 90 0 0 1 240 200" stroke="#facc15" stroke-width="3" fill="none"/>
+    <path d="M60 200 A130 130 0 0 1 320 200" stroke="#a78bfa" stroke-width="3" fill="none"/>
+    <circle cx="180" cy="200" r="5" fill="#ff6b6b"/><circle cx="240" cy="200" r="5" fill="#facc15"/><circle cx="320" cy="200" r="5" fill="#a78bfa"/>
+    ${svgText(150, 228, "light", "#ff8a8a", 14)}${svgText(220, 228, "medium", "#facc15", 14)}${svgText(305, 228, "heavy", "#c4b5fd", 14)}${svgText(40, 228, "ions in", "#5dff9e", 14)}</svg>`;
+  if (k === "crt") return `${o(440, 240)}
+    <path d="M40 100 L190 100 L330 30 L330 210 L190 140 L40 140 Z" fill="rgba(255,255,255,.05)" stroke="#64748b" stroke-width="2"/>
+    <rect x="30" y="108" width="24" height="24" rx="4" fill="#f97316"/>
+    <rect x="160" y="80" width="30" height="16" rx="4" fill="#5b86ff"/><rect x="160" y="144" width="30" height="16" rx="4" fill="#5b86ff"/>
+    <path d="M54 120 L170 120 Q220 120 330 60" stroke="#4dd8ff" stroke-width="3" fill="none"/>
+    <circle cx="330" cy="60" r="6" fill="#4dd8ff"/><rect x="326" y="30" width="8" height="180" fill="#22c55e" opacity=".3"/>
+    ${svgText(20, 232, "electron gun → magnetic coils → screen", "#8796b0", 14, 600)}</svg>`;
+  return "";
+}
+
+const BOOK = {
+  en: {
+    tabs: ["Lorentz force", "Right-hand rule", "Circular motion", "F = qvB vs F = BIL", "Real world", "Worked example"],
+    force: { t: "The Lorentz force", p: "A charge q moving with velocity v through a magnetic field B feels a force:", f: "F = q v B sin θ",
+      rows: [["F", "magnetic force", "newton (N)"], ["q", "charge", "coulomb (C)"], ["v", "speed", "m/s"], ["B", "magnetic field strength", "tesla (T)"], ["θ", "angle between v and B", "degree"]],
+      after: "F is largest when v ⊥ B (θ = 90°) and zero when v is parallel to B. A charge at rest feels no magnetic force at all.", sym: "Symbol", unit: "Unit" },
+    rhr: { t: "Right-hand rule", p: "Point your fingers along v, curl them toward B, and your thumb points along F (for a positive charge).",
+      after: "In the game: moving right with B ⊗ (into the screen) gives a force pointing up. For a negative charge, such as an electron, the force is reversed.", tip: "Try it with your own right hand while looking at the picture!" },
+    circle: { t: "Why the path is a circle", p: "F is always perpendicular to v, so it acts as a centripetal force:", f: "q v B = m v² / r  →  r = m v / (q B)",
+      f2: "T = 2πr / v = 2π m / (q B)", after: "The period T doesn't depend on speed. A faster particle makes a bigger circle but still takes the same time to go around once. That's the secret of the cyclotron boss." },
+    wire: { t: "F = qvB vs F = BIL", p: "Both are the Lorentz force. F = qvB is for one moving charge. F = BIL is for a wire carrying current, which is just many moving charges.",
+      steps: ["Force on one charge: F₁ = q v B", "Charges in a wire of length L: N = n A L", "Total force: F = N q v B = (n A L) q v B", "Current: I = n q v A", "So F = (n q v A) L B = B I L ✔"],
+      after: "n = number of charges per m³, A = cross-section area of the wire. The game uses F = qvB because you control a single particle." },
+    real: { t: "Where is this used?", items: [
+      ["aurora", "Aurora", "Charged particles from the Sun are steered by Earth's magnetic field toward the poles, where they make the sky glow."],
+      ["cyclotron", "Cyclotron", "Particles spiral outward in a magnetic field while an electric field gives them a kick every half-turn. Used to make medical isotopes."],
+      ["spectro", "Mass spectrometer", "Ions with the same speed but different mass bend with different radii (r = mv/qB), so you can tell atoms apart."],
+      ["crt", "CRT television", "Magnetic coils bend an electron beam so it sweeps across the screen and draws the picture."]] },
+    ex: { t: "Worked example (from the game)", p: "Missions 1–2: q = 2 mC, m = 2 g, v = 3 m/s, B = 2 T.",
+      steps: ["F = q v B = (2×10⁻³)(3)(2) = 1.2×10⁻² N = 12 mN", "r = m v / (q B) = (2×10⁻³)(3) / ((2×10⁻³)(2)) = 1.5 m", "T = 2π m / (q B) = 2π(2×10⁻³) / ((2×10⁻³)(2)) ≈ 3.14 s",
+        "After a green gate, v = 4.5 m/s → r = 2.25 m, but T stays 3.14 s!"], tip: "These are exactly the numbers you see on the telemetry panel while playing!" }
+  },
+  id: {
+    tabs: ["Gaya Lorentz", "Kaidah tangan kanan", "Gerak melingkar", "F = qvB vs F = BIL", "Penerapan", "Contoh soal"],
+    force: { t: "Gaya Lorentz", p: "Muatan q yang bergerak dengan kecepatan v di dalam medan magnet B mengalami gaya:", f: "F = q v B sin θ",
+      rows: [["F", "gaya magnet", "newton (N)"], ["q", "muatan", "coulomb (C)"], ["v", "laju", "m/s"], ["B", "kuat medan magnet", "tesla (T)"], ["θ", "sudut antara v dan B", "derajat"]],
+      after: "F paling besar saat v ⊥ B (θ = 90°) dan nol saat v sejajar B. Muatan yang diam tidak mengalami gaya magnet.", sym: "Simbol", unit: "Satuan" },
+    rhr: { t: "Kaidah tangan kanan", p: "Arahkan jari-jari sesuai v, tekuk ke arah B, dan ibu jari menunjukkan arah F (untuk muatan positif).",
+      after: "Di game: bergerak ke kanan dengan B ⊗ (masuk layar) menghasilkan gaya ke atas. Untuk muatan negatif seperti elektron, arah gaya berlawanan.", tip: "Coba dengan tangan kananmu sambil melihat gambar!" },
+    circle: { t: "Mengapa lintasannya melingkar", p: "F selalu tegak lurus v, sehingga berperan sebagai gaya sentripetal:", f: "q v B = m v² / r  →  r = m v / (q B)",
+      f2: "T = 2πr / v = 2π m / (q B)", after: "Periode T tidak bergantung pada laju. Partikel yang lebih cepat membuat lingkaran lebih besar, tetapi waktu satu putarannya tetap sama. Itulah rahasia boss siklotron." },
+    wire: { t: "F = qvB vs F = BIL", p: "Keduanya adalah gaya Lorentz. F = qvB untuk satu muatan yang bergerak. F = BIL untuk kawat berarus, yaitu kumpulan banyak muatan yang bergerak.",
+      steps: ["Gaya pada satu muatan: F₁ = q v B", "Jumlah muatan di kawat sepanjang L: N = n A L", "Gaya total: F = N q v B = (n A L) q v B", "Arus: I = n q v A", "Jadi F = (n q v A) L B = B I L ✔"],
+      after: "n = jumlah muatan per m³, A = luas penampang kawat. Game ini memakai F = qvB karena yang dikendalikan satu partikel." },
+    real: { t: "Di mana dipakai?", items: [
+      ["aurora", "Aurora", "Partikel bermuatan dari Matahari dibelokkan medan magnet Bumi ke arah kutub, lalu membuat langit bercahaya."],
+      ["cyclotron", "Siklotron", "Partikel bergerak spiral keluar dalam medan magnet, sementara medan listrik mendorongnya setiap setengah putaran. Dipakai untuk membuat isotop medis."],
+      ["spectro", "Spektrometer massa", "Ion dengan laju sama tetapi massa berbeda berbelok dengan jari-jari berbeda (r = mv/qB), sehingga jenis atom bisa dibedakan."],
+      ["crt", "TV tabung (CRT)", "Kumparan magnet membelokkan berkas elektron agar menyapu layar dan membentuk gambar."]] },
+    ex: { t: "Contoh soal (dari game)", p: "Misi 1–2: q = 2 mC, m = 2 g, v = 3 m/s, B = 2 T.",
+      steps: ["F = q v B = (2×10⁻³)(3)(2) = 1,2×10⁻² N = 12 mN", "r = m v / (q B) = (2×10⁻³)(3) / ((2×10⁻³)(2)) = 1,5 m", "T = 2π m / (q B) = 2π(2×10⁻³) / ((2×10⁻³)(2)) ≈ 3,14 s",
+        "Setelah gerbang hijau, v = 4,5 m/s → r = 2,25 m, tetapi T tetap 3,14 s!"], tip: "Angka-angka ini persis sama dengan yang tampil di panel telemetri saat bermain!" }
+  }
+};
+
+// =====================================================================
+//  SOUND (Web Audio synthesis)
+// =====================================================================
+const Sound = {
+  ac: null, sfxG: null, musG: null, hum: null, humG: null, next: 0, step: 0,
+  init() {
+    if (this.ac) { if (this.ac.state === "suspended") this.ac.resume(); return; }
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+    const ac = this.ac = new AC();
+    this.sfxG = ac.createGain(); this.sfxG.connect(ac.destination);
+    this.musG = ac.createGain(); this.musG.connect(ac.destination);
+    const lp = ac.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 500;
+    this.hum = ac.createOscillator(); this.hum.type = "sawtooth"; this.hum.frequency.value = 110;
+    this.humG = ac.createGain(); this.humG.gain.value = 0;
+    this.hum.connect(lp); lp.connect(this.humG); this.humG.connect(this.sfxG); this.hum.start();
+    this.volume(); this.next = ac.currentTime + .1;
+    setInterval(() => this.music(), 200);
+  },
+  volume() { if (!this.ac) return; this.sfxG.gain.value = SET.sfx; this.musG.gain.value = SET.music * .55; },
+  tone(f, d, type = "sine", v = .2, f2, delay = 0) {
+    if (!this.ac) return;
+    const t = this.ac.currentTime + delay, o = this.ac.createOscillator(), g = this.ac.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t); if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + d);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(v, t + .01); g.gain.exponentialRampToValueAtTime(.0005, t + d);
+    o.connect(g); g.connect(this.sfxG); o.start(t); o.stop(t + d + .05);
+  },
+  noise(d, v = .3) {
+    if (!this.ac) return;
+    const ac = this.ac, n = Math.floor(ac.sampleRate * d), buf = ac.createBuffer(1, n, ac.sampleRate), ch = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) ch[i] = (Math.random() * 2 - 1) * (1 - i / n);
+    const s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
+    f.type = "lowpass"; f.frequency.setValueAtTime(2000, ac.currentTime); f.frequency.exponentialRampToValueAtTime(100, ac.currentTime + d);
+    g.gain.value = v; s.buffer = buf; s.connect(f); f.connect(g); g.connect(this.sfxG); s.start();
+  },
+  play(k) {
+    switch (k) {
+      case "click": this.tone(660, .07, "square", .05); this.tone(1320, .05, "sine", .05, null, .02); break;
+      case "orb": this.tone(880, .12, "triangle", .18); this.tone(1320, .2, "triangle", .15, null, .07); break;
+      case "crash": this.noise(.5, .45); this.tone(160, .4, "sawtooth", .12, 40); break;
+      case "hit": this.noise(.25, .3); this.tone(300, .2, "square", .08, 120); break;
+      case "accel": this.tone(300, .35, "sawtooth", .08, 1200); break;
+      case "decel": this.tone(1000, .35, "sawtooth", .08, 250); break;
+      case "kick": this.tone(220, .25, "sawtooth", .1, 880); this.tone(1760, .12, "sine", .08, null, .05); break;
+      case "flip": this.tone(500, .12, "square", .07, 900); this.tone(900, .12, "square", .07, 500, .12); break;
+      case "check": this.tone(740, .15, "sine", .15); this.tone(988, .2, "sine", .13, null, .1); break;
+      case "win": [523, 659, 784, 1047].forEach((f, i) => this.tone(f, .35, "triangle", .18, null, i * .11)); break;
+      case "boom": this.noise(1.4, .6); this.tone(90, 1.2, "sawtooth", .2, 30); break;
+      case "alarm": this.tone(880, .18, "square", .06); this.tone(660, .18, "square", .06, null, .2); break;
+      case "wrong": this.tone(220, .3, "square", .08, 160); break;
+      case "step": this.tone(988, .1, "sine", .12); this.tone(1319, .18, "sine", .1, null, .08); break;
+    }
+  },
+  setHum(B) {
+    if (!this.ac) return;
+    const t = this.ac.currentTime;
+    this.humG.gain.setTargetAtTime(B ? .07 : 0, t, .05);
+    this.hum.frequency.setTargetAtTime(B < 0 ? 98 : 131, t, .05);
+  },
+  music() {
+    if (!this.ac || SET.music <= 0) return;
+    const ac = this.ac, chords = [[220, 261.63, 329.63], [174.61, 220, 261.63], [196, 246.94, 293.66], [164.81, 207.65, 246.94]];
+    while (this.next < ac.currentTime + .5) {
+      const t = this.next, ch = chords[Math.floor(this.step / 16) % 4];
+      if (this.step % 16 === 0) ch.forEach(f => {
+        const o = ac.createOscillator(), g = ac.createGain(); o.type = "sine"; o.frequency.value = f / 2;
+        g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.07, t + 1.5); g.gain.linearRampToValueAtTime(0, t + 4.2);
+        o.connect(g); g.connect(this.musG); o.start(t); o.stop(t + 4.3);
+      });
+      if (this.step % 2 === 0) {
+        const f = ch[(this.step / 2) % 3] * (this.step % 8 < 4 ? 2 : 4);
+        const o = ac.createOscillator(), g = ac.createGain(); o.type = "triangle"; o.frequency.value = f;
+        g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.035, t + .02); g.gain.exponentialRampToValueAtTime(.0005, t + .6);
+        o.connect(g); g.connect(this.musG); o.start(t); o.stop(t + .65);
+      }
+      this.next += .25; this.step++;
+    }
+  }
+};
+
+// =====================================================================
+//  GAME STATE
+// =====================================================================
+const cv = document.getElementById("game"), ctx = cv.getContext("2d");
+const fxc = document.getElementById("fx"), fctx = fxc.getContext("2d");
+const $ = id => document.getElementById(id);
+let W = 0, H = 0, dpr = 1, baseScale = 40, scale = 40;
+
+let mode = "level", lvlIdx = 0, cur = null, theme = THEMES[0], customRef = null, returnTo = "menu";
+let grid = [], mapW = 0, mapH = 0, orbs = [], portal = null, wallImg = null, radarImg = null, cpActive = "";
+let P = null, checkpoint = null, Bnow = 0;
+let state = "menu", deadT = 0, timeT = 0, crashes = 0, collected = 0, score = 0, penN = 0;
+const PTS_ORB = 100, PTS_FINISH = 500, PTS_CRASH = 100;
+function addScore(d, x, y) { if (d < 0) penN++; score += d; if (x != null) popup(x, y, (d > 0 ? "+" : "−") + Math.abs(d), d > 0 ? "#facc15" : "#ff5d5d"); const e = $("hScore"); if (e) { e.classList.remove("bump", "drop"); void e.offsetWidth; e.classList.add(d > 0 ? "bump" : "drop"); } }
+let stats = { dist: 0, maxV: 0, maxF: 0, fieldT: 0 };
+let trail = [], sparks = [], dust = [], confetti = [], popups = [], shake = 0, flash = null;
+let cam = { x: 0, y: 0 };
+let keyL = false, keyR = false, lastCell = "";
+let tutStep = 0, tutHold = 0;
+let hist = [];
+let boss = null;
+const PPM = 64;
+
+function levelDef() { return mode === "tut" ? TUTORIAL : mode === "boss" ? BOSS : mode === "custom" ? customRef : LEVELS[lvlIdx]; }
+function levelName() {
+  if (mode === "tut") return SET.lang === "id" ? "Latihan" : "Training";
+  if (mode === "custom") return customRef.name || T("untitled");
+  if (mode === "boss") return BOSS[SET.lang].name;
+  return LEVELS[lvlIdx][SET.lang].name;
+}
+function levelTag() {
+  if (mode === "tut") return "TRAINING";
+  if (mode === "custom") return "CUSTOM";
+  if (mode === "boss") return "⚠ BOSS";
+  return `${T("mission").toUpperCase()} 0${lvlIdx + 1}`;
+}
+
+// m: "tut" | "level" | "boss" | "custom"
+function loadLevel(m, idx, custom) {
+  mode = m; lvlIdx = idx; if (custom) customRef = custom;
+  cur = levelDef(); theme = THEMES[cur.theme] || THEMES[0];
+  document.body.classList.toggle("tutorial", mode === "tut");
+  document.body.classList.toggle("boss", mode === "boss");
+  crashes = 0; collected = 0; score = 0; penN = 0; timeT = 0; tutStep = 0; tutHold = 0; hist = []; popups = [];
+  stats = { dist: 0, maxV: 0, maxF: 0, fieldT: 0 };
+  sparks = []; trail = [];
+  if (mode === "boss") { setupBoss(); return; }
+  boss = null;
+  mapH = cur.map.length; mapW = Math.max(...cur.map.map(r => r.length));
+  grid = cur.map.map(r => r.padEnd(mapW, "#").split(""));
+  orbs = []; cpActive = "";
+  const ex = []; let start = null;
+  for (let y = 0; y < mapH; y++) for (let x = 0; x < mapW; x++) {
+    const c = grid[y][x];
+    if (c === "o") { orbs.push({ x: x + .5, y: y + .5, got: false, ph: Math.random() * 6 }); grid[y][x] = "."; }
+    if (c === "S") { start = { x: x + .5, y: y + .5 }; grid[y][x] = "."; }
+    if (c === "E") ex.push([x + .5, y + .5]);
+  }
+  if (!start) start = { x: 1.5, y: 1.5 };
+  portal = ex.length ? { x: ex.reduce((s, e) => s + e[0], 0) / ex.length, y: ex.reduce((s, e) => s + e[1], 0) / ex.length,
+    bits: Array.from({ length: 40 }, () => ({ a: Math.random() * 6.28, r: Math.random(), s: .5 + Math.random() })) } : null;
+  checkpoint = { x: start.x, y: start.y, vx: cur.v, vy: 0, q: cur.q };
+  dust = Array.from({ length: Math.round(mapW * mapH / 6) }, () => ({ x: Math.random() * mapW, y: Math.random() * mapH,
+    vx: (Math.random() - .5) * .15, vy: (Math.random() - .5) * .15, r: .02 + Math.random() * .05, ph: Math.random() * 6 }));
+  wallImg = buildWalls(); radarImg = buildRadar();
+  respawn();
+  cam.x = P.x; cam.y = P.y;
+}
+
+function respawn() {
+  P = { x: checkpoint.x, y: checkpoint.y, vx: checkpoint.vx, vy: checkpoint.vy, q: checkpoint.q, m: cur.m };
+  trail = []; lastCell = mode === "boss" ? "" : cellAt(P.x, P.y);
+}
+
+function cellAt(x, y) {
+  const gx = Math.floor(x), gy = Math.floor(y);
+  if (gx < 0 || gy < 0 || gx >= mapW || gy >= mapH) return "#";
+  return grid[gy][gx];
+}
+const orbsActive = () => mode !== "tut" || tutStep >= 5;
+const portalActive = () => !!portal && (mode !== "tut" || tutStep >= 6);
+
+// =====================================================================
+//  UPDATE (normal missions)
+// =====================================================================
+const R_P = 0.22, SUB = 0.002;
+function update(dtReal) {
+  if (state !== "play") return;
+  const dt = dtReal * SET.speed;
+  if (deadT > 0) { deadT -= dtReal; if (deadT <= 0) respawn(); return; }
+  if (mode === "boss") { updateBoss(dt); return; }
+  Bnow = (keyR ? cur.B : 0) - (keyL ? cur.B : 0);
+  if (mode === "tut") tutorialTick(dt);
+  if (mode === "tut" && TUT_STEPS[tutStep].kind === "btn") return;
+  timeT += dt; trackStats(dt);
+  const n = Math.ceil(dt / SUB), h = dt / n;
+  for (let i = 0; i < n; i++) {
+    rotateVelocity(P, Bnow, h);
+    P.x += P.vx * h; P.y += P.vy * h;
+    for (let a = 0; a < 8; a++) {
+      const ang = a * Math.PI / 4;
+      if (cellAt(P.x + Math.cos(ang) * R_P, P.y + Math.sin(ang) * R_P) === "#") { crash(); return; }
+    }
+    const c = cellAt(P.x, P.y);
+    if (c !== lastCell) {
+      if (c === "A") { setSpeed(P, Math.min(4.5, speed(P) * 1.5)); toast(T("accel"), "#5dff9e"); burst(P.x, P.y, "#5dff9e", 30); Sound.play("accel"); flash = { c: "93,255,158", t: .4 }; }
+      if (c === "D") { setSpeed(P, Math.max(3, speed(P) / 1.5)); toast(T("decel"), "#c084fc"); burst(P.x, P.y, "#c084fc", 30); Sound.play("decel"); flash = { c: "192,132,252", t: .4 }; }
+      if (c === "F") { P.q = -P.q; toast(T("flip")(P.q), "#f472b6"); burst(P.x, P.y, "#f472b6", 40); Sound.play("flip"); flash = { c: "244,114,182", t: .4 }; }
+      if (c === "C") {
+        const key = Math.floor(P.x) + "," + Math.floor(P.y);
+        checkpoint = { x: P.x, y: P.y, vx: P.vx, vy: P.vy, q: P.q };
+        if (cpActive !== key) { cpActive = key; toast(T("checkpoint"), "#4fd6ff"); Sound.play("check"); burst(P.x, P.y, "#4fd6ff", 20); }
+      }
+      if (c === "E" && portalActive()) { levelDone(); return; }
+      lastCell = c;
+    }
+  }
+  if (orbsActive()) for (const o of orbs) if (!o.got && Math.hypot(o.x - P.x, o.y - P.y) < 0.6) {
+    o.got = true; collected++; burst(o.x, o.y, "#facc15", 22); Sound.play("orb"); addScore(PTS_ORB, o.x, o.y - .4);
+  }
+  trail.push([P.x, P.y]); if (trail.length > 110) trail.shift();
+}
+
+function trackStats(dt) {
+  const v = speed(P), F = Math.abs(P.q) * v * Math.abs(Bnow);
+  stats.dist += v * dt; stats.maxV = Math.max(stats.maxV, v); stats.maxF = Math.max(stats.maxF, F);
+  if (Bnow) stats.fieldT += dt;
+  hist.push([F, v]); if (hist.length > 220) hist.shift();
+}
+
+function crash() {
+  crashes++; addScore(-PTS_CRASH, P.x, P.y - .5); deadT = 1.0; if (SET.shake) shake = .4;
+  burst(P.x, P.y, P.q > 0 ? "#ff6b6b" : "#4dd8ff", 60); burst(P.x, P.y, "#ffffff", 20);
+  toast(T("crash"), "#ff5d5d"); Sound.play("crash"); flash = { c: "255,93,93", t: .35 };
+}
+function burst(x, y, color, n) {
+  const m = SET.hq ? n : Math.ceil(n / 2);
+  for (let i = 0; i < m; i++) {
+    const a = Math.random() * Math.PI * 2, s = 1 + Math.random() * 5;
+    sparks.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: .5 + Math.random() * .7, color, sz: 2 + Math.random() * 3 });
+  }
+}
+function popup(x, y, text, color) { popups.push({ x, y, text, color, life: 1.2 }); }
+
+let toastTimer = 0;
+function toast(msg, color) {
+  const t = $("toast");
+  t.textContent = msg; t.style.borderLeftColor = color || ""; t.style.color = color || "";
+  t.classList.add("show"); clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 2300);
+}
+let bannerTimer = 0;
+function banner(t1, t2) {
+  $("bannerT1").textContent = t1; $("bannerT2").textContent = t2;
+  $("banner").classList.add("show"); clearTimeout(bannerTimer); bannerTimer = setTimeout(() => $("banner").classList.remove("show"), 2200);
+}
+
+// ---- tutorial ----
+function tutorialTick(dt) {
+  const st = TUT_STEPS[tutStep]; let need = 0;
+  if (st.kind === "holdL") { need = 1.3; if (keyL && !keyR) tutHold += dt; }
+  if (st.kind === "holdR") { need = 1.3; if (keyR && !keyL) tutHold += dt; }
+  if (st.kind === "free") { need = 1.6; if (!keyL && !keyR) tutHold += dt; else tutHold = 0; }
+  if (st.kind === "orbs") { need = 1; tutHold = collected >= orbs.length ? 1 : collected / orbs.length; }
+  if (need && tutHold >= need) tutAdvance();
+  $("tutBar").style.width = need ? Math.min(100, tutHold / need * 100) + "%" : "0%";
+}
+function tutAdvance() {
+  if (tutStep >= TUT_STEPS.length - 1) return;
+  tutStep++; tutHold = 0; Sound.play("step"); renderTut();
+  if (tutStep === 5) burst(P.x, P.y, "#facc15", 30);
+}
+function renderTut() {
+  const st = TUT_STEPS[tutStep], tm = $("tutMascot");
+  if (!tm.innerHTML) tm.innerHTML = mascotSVG();
+  $("tutText").innerHTML = st[SET.lang] + (st.kind === "btn" ? `<div style="margin-top:8px"><button class="cbtn primary" id="tutNext">${T("nextBtn")}</button></div>` : "");
+  $("tutDots").innerHTML = TUT_STEPS.map((_, i) => `<span class="${i <= tutStep ? "on" : ""}"></span>`).join("");
+  $("tutStepNo").textContent = `${tutStep + 1}/${TUT_STEPS.length}`;
+  const nb = $("tutNext"); if (nb) nb.onclick = () => { Sound.play("click"); tutAdvance(); };
+}
+
+// =====================================================================
+//  BOSS: THE CYCLOTRON CORE
+// =====================================================================
+function setupBoss() {
+  mapW = mapH = 0; grid = []; orbs = []; portal = null;
+  const r0 = BOSS.m * BOSS.v / (BOSS.q * BOSS.B);
+  checkpoint = { x: 0, y: r0, vx: BOSS.v, vy: 0, q: BOSS.q };
+  boss = { proj: [], emitT: 2.5, emitA: 0, hits: 0, kicks: 0, kickBuf: -9, inGap: false, kicked: false, inv: 0, phase: 1, ready: false, won: false, winT: 0, coreFlash: 0 };
+  dust = Array.from({ length: 70 }, () => ({ x: (Math.random() - .5) * 16, y: (Math.random() - .5) * 16, vx: (Math.random() - .5) * .15, vy: (Math.random() - .5) * .15, r: .02 + Math.random() * .05, ph: Math.random() * 6 }));
+  respawn(); cam.x = 0; cam.y = 0;
+}
+function bossEnergy() { return Math.max(0, Math.min(1, (speed(P) - BOSS.v) / (BOSS.vTarget - BOSS.v))); }
+function requestKick() { if (mode === "boss" && state === "play" && boss) { boss.kickBuf = timeT; $("padK").classList.add("on"); setTimeout(() => $("padK").classList.remove("on"), 120); } }
+
+function updateBoss(dt) {
+  const b = boss;
+  if (b.won) { b.winT -= dt; if (b.winT <= 0) { b.won = false; levelDone(); } return; }
+  Bnow = -BOSS.B * (1 + .35 * (keyL ? 1 : 0) - .35 * (keyR ? 1 : 0));
+  timeT += dt; trackStats(dt);
+  if (b.inv > 0) b.inv -= dt;
+  const n = Math.ceil(dt / SUB), h = dt / n;
+  for (let i = 0; i < n; i++) {
+    rotateVelocity(P, Bnow, h);
+    P.x += P.vx * h; P.y += P.vy * h;
+    const d = Math.hypot(P.x, P.y), ing = Math.abs(P.x) < BOSS.gap;
+    if (ing && !b.inGap) { b.inGap = true; b.kicked = false; }
+    if (!ing && b.inGap) b.inGap = false;
+    if (ing && !b.kicked && timeT - b.kickBuf < .35) doKick();
+    if (d < .62) bossHit(true);
+    if (d > BOSS.R) {
+      if (speed(P) >= BOSS.vTarget) { bossWin(); return; }
+      // containment field: re-centre the orbit (r = mv/qB around the core) with a small speed loss
+      const v = Math.max(BOSS.v, speed(P) * .9), r = P.m * v / (Math.abs(P.q) * BOSS.B);
+      burst(P.x, P.y, "#fb7185", 30); Sound.play("hit"); flash = { c: "251,113,133", t: .3 }; if (SET.shake) shake = .25;
+      addScore(-PTS_CRASH, P.x, P.y - .5); P.x = 0; P.y = r; P.vx = v; P.vy = 0; trail = []; b.hits++; b.inv = 1;
+      toast(SET.lang === "id" ? "Medan pengaman mengembalikan orbit ke tengah. Laju ↓" : "Containment field re-centred your orbit. Speed ↓", "#fb7185");
+      break;
+    }
+  }
+  // projectiles
+  for (const p of b.proj) { p.x += p.vx * dt; p.y += p.vy * dt; p.tr.push([p.x, p.y]); if (p.tr.length > 8) p.tr.shift();
+    if (b.inv <= 0 && Math.hypot(p.x - P.x, p.y - P.y) < .38) { p.dead = true; bossHit(false); } }
+  b.proj = b.proj.filter(p => !p.dead && Math.hypot(p.x, p.y) < BOSS.R + .6);
+  // phases and emission
+  const e = bossEnergy(), ph = e < .35 ? 1 : e < .7 ? 2 : 3;
+  if (ph !== b.phase) { b.phase = ph; banner(`${T("phase")} ${ph}`, ph === 2 ? "Overload" : "Meltdown"); Sound.play("alarm"); }
+  if (!b.ready && speed(P) >= BOSS.vTarget) { b.ready = true; toast(T("extraction"), "#5dff9e"); Sound.play("check"); }
+  b.emitT -= dt;
+  if (b.emitT <= 0) {
+    const arms = [1, 2, 3][ph - 1], spd = 1.5 + ph * .2;
+    b.emitT = [1.5, 1.1, .85][ph - 1];
+    for (let k = 0; k < arms; k++) {
+      const a = b.emitA + k * Math.PI * 2 / arms;
+      b.proj.push({ x: Math.cos(a) * .7, y: Math.sin(a) * .7, vx: Math.cos(a) * spd, vy: Math.sin(a) * spd, tr: [] });
+    }
+    b.emitA += ph === 3 ? .55 : .38; b.coreFlash = .25;
+  }
+  if (b.coreFlash > 0) b.coreFlash -= dt;
+  trail.push([P.x, P.y]); if (trail.length > 160) trail.shift();
+}
+function doKick() {
+  const b = boss; b.kicked = true; b.kicks++;
+  const before = speed(P); setSpeed(P, Math.min(11, before * 1.15));
+  burst(P.x, P.y, "#5dff9e", 26); Sound.play("kick"); flash = { c: "93,255,158", t: .25 };
+  popup(P.x, P.y - .5, `+${(.5 * (P.m / 1000) * (speed(P) ** 2 - before ** 2) * 1000).toFixed(1)} mJ`, "#5dff9e");
+}
+function bossHit(core) {
+  const b = boss; if (b.inv > 0) return;
+  b.inv = 1.6; b.hits++;
+  setSpeed(P, Math.max(BOSS.v, speed(P) * .93));
+  if (SET.shake) shake = .3; burst(P.x, P.y, "#ff5d5d", 30); Sound.play("hit"); flash = { c: "255,93,93", t: .3 };
+  toast(T("hit"), "#ff5d5d");
+}
+function bossWin() {
+  const b = boss; b.won = true; b.winT = 1.8; b.proj = [];
+  Sound.play("boom"); if (SET.shake) shake = 1;
+  for (let k = 0; k < 4; k++) burst(0, 0, ["#fb7185", "#facc15", "#ffffff", "#a78bfa"][k], 70);
+  banner("CYCLOTRON", T("bossWin"));
+}
+
+// =====================================================================
+//  RENDER: prerendered layers
+// =====================================================================
+function resize() {
+  dpr = Math.min(2, window.devicePixelRatio || 1);
+  W = cv.width = fxc.width = Math.round(innerWidth * dpr); H = cv.height = fxc.height = Math.round(innerHeight * dpr);
+  baseScale = Math.min(W / 20, H / 12);
+  sizeHudCanvases(); bgCache.clear();
+}
+function sizeHudCanvases() {
+  for (const id of ["gauge", "mini", "radar", "scope"]) {
+    const c = $(id), w = Math.round(c.clientWidth * dpr), h = Math.round(c.clientHeight * dpr);
+    if (w && h && (c.width !== w || c.height !== h)) { c.width = w; c.height = h; }
+  }
+}
+
+const bgCache = new Map();
+function nebula(th) {
+  const key = THEMES.indexOf(th);
+  if (bgCache.has(key)) return bgCache.get(key);
+  const c = document.createElement("canvas"); c.width = 1600; c.height = 1000;
+  const g = c.getContext("2d");
+  const gr = g.createLinearGradient(0, 0, 0, 1000); gr.addColorStop(0, th.top); gr.addColorStop(1, th.bot);
+  g.fillStyle = gr; g.fillRect(0, 0, 1600, 1000);
+  g.globalCompositeOperation = "lighter";
+  let seed = key * 99 + 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 46; i++) {
+    const x = rnd() * 1600, y = rnd() * 1000, r = 120 + rnd() * 380, col = th.neb[i % th.neb.length];
+    const rg = g.createRadialGradient(x, y, 0, x, y, r);
+    rg.addColorStop(0, col + "30"); rg.addColorStop(.5, col + "12"); rg.addColorStop(1, col + "00");
+    g.fillStyle = rg; g.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+  for (let i = 0; i < 500; i++) { const x = rnd() * 1600, y = rnd() * 1000, s = rnd() * 1.4 + .3; g.fillStyle = `rgba(220,230,255,${.2 + rnd() * .6})`; g.fillRect(x, y, s, s); }
+  g.globalCompositeOperation = "source-over";
+  bgCache.set(key, c); return c;
+}
+let starLayers = [];
+function makeStars() { starLayers = [.03, .07, .14].map((z, li) => ({ z, s: Array.from({ length: 70 - li * 15 }, () => ({ x: Math.random(), y: Math.random(), b: Math.random(), sz: (li + 1) * .9 })) })); }
+makeStars();
+
+function drawBackground(t, camx, camy) {
+  const img = nebula(theme), sc = Math.max(W / 1600, H / 1000) * 1.15;
+  const ox = -((camx * scale * .04) % (1600 * sc * .1)), oy = -((camy * scale * .04) % (1000 * sc * .1));
+  ctx.drawImage(img, (W - 1600 * sc) / 2 + ox, (H - 1000 * sc) / 2 + oy, 1600 * sc, 1000 * sc);
+  for (const p of theme.planets) drawPlanet(p, W * p.fx - camx * scale * .05, H * p.fy - camy * scale * .05, p.r * dpr * Math.min(1.4, W / 1400 / dpr + .4), t);
+  for (const L of starLayers) for (const s of L.s) {
+    let x = (s.x * W - camx * scale * L.z) % W, y = (s.y * H - camy * scale * L.z) % H;
+    if (x < 0) x += W; if (y < 0) y += H;
+    ctx.fillStyle = `rgba(230,238,255,${.35 + .55 * Math.abs(Math.sin(t * (1 + s.b) + s.b * 20))})`;
+    ctx.fillRect(x, y, s.sz * dpr, s.sz * dpr);
+  }
+}
+function drawPlanet(p, x, y, r, t) {
+  if (p.sun) {
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r * 2.4);
+    g.addColorStop(0, "#fffbe6"); g.addColorStop(.22, p.c1); g.addColorStop(.42, p.c2 + "aa"); g.addColorStop(1, p.c2 + "00");
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r * 2.4, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = p.c1 + "55"; ctx.lineWidth = 2 * dpr;
+    for (let k = 0; k < 6; k++) { const a = t * .2 + k; ctx.beginPath(); ctx.arc(x + Math.cos(a) * r * .9, y + Math.sin(a) * r * .9, r * .35, a, a + 2); ctx.stroke(); }
+    return;
+  }
+  const glow = ctx.createRadialGradient(x, y, r * .9, x, y, r * 1.5);
+  glow.addColorStop(0, p.c1 + "55"); glow.addColorStop(1, p.c1 + "00");
+  ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(x, y, r * 1.5, 0, Math.PI * 2); ctx.fill();
+  if (p.ring) { ctx.save(); ctx.translate(x, y); ctx.rotate(-.35); ctx.strokeStyle = p.ring + "55"; ctx.lineWidth = r * .14; ctx.beginPath(); ctx.ellipse(0, 0, r * 1.75, r * .45, 0, Math.PI, Math.PI * 2); ctx.stroke(); ctx.restore(); }
+  const g = ctx.createRadialGradient(x - r * .4, y - r * .4, r * .1, x, y, r);
+  g.addColorStop(0, "#ffffff"); g.addColorStop(.12, p.c1); g.addColorStop(.75, p.c2); g.addColorStop(1, "#05060d");
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  ctx.save(); ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.clip();
+  ctx.strokeStyle = "rgba(255,255,255,.08)"; ctx.lineWidth = r * .08;
+  for (let k = -3; k <= 3; k++) { ctx.beginPath(); ctx.ellipse(x, y + k * r * .25, r * 1.1, r * .08, .2, 0, Math.PI * 2); ctx.stroke(); }
+  ctx.restore();
+  if (p.ring) { ctx.save(); ctx.translate(x, y); ctx.rotate(-.35); ctx.strokeStyle = p.ring + "aa"; ctx.lineWidth = r * .14; ctx.beginPath(); ctx.ellipse(0, 0, r * 1.75, r * .45, 0, 0, Math.PI); ctx.stroke(); ctx.restore(); }
+}
+
+let hazardPat = null;
+function hazardPattern(g) {
+  const c = document.createElement("canvas"); c.width = c.height = 16;
+  const h = c.getContext("2d"); h.fillStyle = "#14161c"; h.fillRect(0, 0, 16, 16);
+  h.fillStyle = "#f5b700"; h.beginPath(); h.moveTo(0, 16); h.lineTo(8, 0); h.lineTo(16, 0); h.lineTo(8, 16); h.closePath(); h.fill();
+  h.beginPath(); h.moveTo(-8, 16); h.lineTo(0, 0); h.lineTo(0, 16); h.fill();
+  return g.createPattern(c, "repeat");
+}
+
+// Realistic facility: metal floor plates + armoured walls with rivets, vents, hazard bands and LED strips
+function buildWalls() {
+  const c = document.createElement("canvas"); c.width = mapW * PPM; c.height = mapH * PPM;
+  const g = c.getContext("2d");
+  const isW = (x, y) => x < 0 || y < 0 || x >= mapW || y >= mapH || grid[y][x] === "#";
+  let seed = mapW * 31 + mapH * 7 + (cur.theme || 0); const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  // floor plates (semi transparent so space shows through like a glass deck)
+  for (let y = 0; y < mapH; y++) for (let x = 0; x < mapW; x++) if (!isW(x, y)) {
+    const X = x * PPM, Y = y * PPM;
+    g.fillStyle = (x + y) % 2 ? "rgba(10,14,22,.58)" : "rgba(14,19,30,.58)"; g.fillRect(X, Y, PPM, PPM);
+    g.strokeStyle = "rgba(160,180,220,.07)"; g.lineWidth = 2; g.strokeRect(X + 1, Y + 1, PPM - 2, PPM - 2);
+    g.fillStyle = "rgba(160,180,220,.12)";
+    for (const [dx, dy] of [[5, 5], [PPM - 5, 5], [5, PPM - 5], [PPM - 5, PPM - 5]]) { g.beginPath(); g.arc(X + dx, Y + dy, 1.6, 0, 7); g.fill(); }
+    if (rnd() < .05) { g.strokeStyle = "rgba(160,180,220,.10)"; g.lineWidth = 2; for (let k = 0; k < 4; k++) { g.beginPath(); g.moveTo(X + 16, Y + 18 + k * 8); g.lineTo(X + PPM - 16, Y + 18 + k * 8); g.stroke(); } }
+  }
+  // wall body
+  const path = new Path2D();
+  for (let y = 0; y < mapH; y++) for (let x = 0; x < mapW; x++) if (isW(x, y)) path.rect(x * PPM, y * PPM, PPM + .5, PPM + .5);
+  const gr = g.createLinearGradient(0, 0, c.width * .25, c.height);
+  gr.addColorStop(0, theme.steel[0]); gr.addColorStop(1, theme.steel[1]);
+  g.save(); g.fillStyle = gr; g.fill(path); g.clip(path);
+  // brushed metal noise
+  for (let i = 0; i < mapW * mapH * 6; i++) { g.fillStyle = `rgba(255,255,255,${rnd() * .03})`; g.fillRect(rnd() * c.width, rnd() * c.height, rnd() * 30 + 4, 1); }
+  // armour plates (2x2) with bevel, rivets, vents, labels
+  for (let y = 0; y < mapH; y += 2) for (let x = 0; x < mapW; x += 2) {
+    const X = x * PPM, Y = y * PPM, w = PPM * 2, h = PPM * 2;
+    g.strokeStyle = "rgba(0,0,0,.55)"; g.lineWidth = 3; g.strokeRect(X + 2, Y + 2, w - 4, h - 4);
+    g.strokeStyle = "rgba(255,255,255,.06)"; g.lineWidth = 1.5; g.beginPath(); g.moveTo(X + 4, Y + h - 5); g.lineTo(X + 4, Y + 4); g.lineTo(X + w - 5, Y + 4); g.stroke();
+    for (const [dx, dy] of [[10, 10], [w - 10, 10], [10, h - 10], [w - 10, h - 10]]) {
+      const rg = g.createRadialGradient(X + dx - 1, Y + dy - 1, 0, X + dx, Y + dy, 4); rg.addColorStop(0, "#c7d0de"); rg.addColorStop(1, "#2a3140");
+      g.fillStyle = rg; g.beginPath(); g.arc(X + dx, Y + dy, 3.6, 0, 7); g.fill();
+    }
+    const inner = isW(x, y) && isW(x + 1, y) && isW(x, y + 1) && isW(x + 1, y + 1);
+    const r = rnd();
+    if (inner && r < .18) { // vent
+      g.fillStyle = "rgba(0,0,0,.45)"; g.fillRect(X + 26, Y + 34, w - 52, h - 68);
+      g.strokeStyle = "rgba(255,255,255,.07)"; g.lineWidth = 3;
+      for (let k = 0; k < 6; k++) { g.beginPath(); g.moveTo(X + 30, Y + 42 + k * 9); g.lineTo(X + w - 30, Y + 42 + k * 9); g.stroke(); }
+    } else if (inner && r < .26) { // warning sign
+      g.fillStyle = "#f5b700"; g.beginPath(); g.moveTo(X + w / 2, Y + 30); g.lineTo(X + w / 2 + 28, Y + 80); g.lineTo(X + w / 2 - 28, Y + 80); g.closePath(); g.fill();
+      g.fillStyle = "#111"; g.font = "bold 26px Arial"; g.textAlign = "center"; g.fillText("⚡", X + w / 2, Y + 74);
+      g.fillStyle = "rgba(245,183,0,.7)"; g.font = "bold 11px Consolas, monospace"; g.fillText("HIGH FIELD", X + w / 2, Y + 100);
+    } else if (inner && r < .34) { // label
+      g.fillStyle = "rgba(200,215,240,.25)"; g.font = "bold 14px Consolas, monospace"; g.textAlign = "left";
+      g.fillText(["COIL-", "MAG-", "SECT-", "B-FLD-"][Math.floor(rnd() * 4)] + String(Math.floor(rnd() * 90 + 10)), X + 16, Y + h - 18);
+    } else if (inner && r < .42) { // copper coil pack
+      for (let k = 0; k < 7; k++) { const cg = g.createLinearGradient(0, Y + 30, 0, Y + h - 30); cg.addColorStop(0, "#7c3a12"); cg.addColorStop(.5, "#e08a3c"); cg.addColorStop(1, "#5a2a0c");
+        g.fillStyle = cg; g.fillRect(X + 24 + k * 12, Y + 30, 9, h - 60); }
+    }
+  }
+  // hazard band just inside exposed edges
+  const edges = new Path2D();
+  for (let y = 0; y < mapH; y++) for (let x = 0; x < mapW; x++) if (isW(x, y)) {
+    const X0 = x * PPM, Y0 = y * PPM, X1 = X0 + PPM, Y1 = Y0 + PPM;
+    if (!isW(x, y - 1)) { edges.moveTo(X0, Y0); edges.lineTo(X1, Y0); }
+    if (!isW(x, y + 1)) { edges.moveTo(X0, Y1); edges.lineTo(X1, Y1); }
+    if (!isW(x - 1, y)) { edges.moveTo(X0, Y0); edges.lineTo(X0, Y1); }
+    if (!isW(x + 1, y)) { edges.moveTo(X1, Y0); edges.lineTo(X1, Y1); }
+  }
+  g.globalAlpha = .55; g.strokeStyle = hazardPattern(g); g.lineWidth = 22; g.stroke(edges); g.globalAlpha = 1;
+  g.restore();
+  // LED strip + metal lip
+  g.strokeStyle = "#0b0e14"; g.lineWidth = 7; g.stroke(edges);
+  g.shadowColor = theme.edge; g.shadowBlur = 20; g.strokeStyle = theme.edge; g.lineWidth = 3; g.lineCap = "round"; g.stroke(edges);
+  g.shadowBlur = 0; g.strokeStyle = "rgba(255,255,255,.8)"; g.lineWidth = 1.2; g.stroke(edges);
+  return c;
+}
+function buildRadar() {
+  const c = document.createElement("canvas"); c.width = mapW * 6; c.height = mapH * 6;
+  const g = c.getContext("2d");
+  for (let y = 0; y < mapH; y++) for (let x = 0; x < mapW; x++) {
+    const ch = grid[y][x];
+    if (ch === "#") { g.fillStyle = "rgba(93,255,158,.32)"; g.fillRect(x * 6, y * 6, 6, 6); }
+    else if ("ADF".includes(ch)) { g.fillStyle = { A: "#5dff9e", D: "#c084fc", F: "#f472b6" }[ch]; g.globalAlpha = .7; g.fillRect(x * 6 + 2, y * 6, 2, 6); g.globalAlpha = 1; }
+  }
+  return c;
+}
+
+// =====================================================================
+//  RENDER: world
+// =====================================================================
+const sx = x => (x - cam.x) * scale + W / 2;
+const sy = y => (y - cam.y) * scale + H / 2;
+
+function arrow(c, x1, y1, x2, y2, color, w) {
+  const a = Math.atan2(y2 - y1, x2 - x1), len = Math.hypot(x2 - x1, y2 - y1);
+  if (len < 3) return;
+  const hd = Math.min(len * .45, 12 * dpr);
+  c.strokeStyle = c.fillStyle = color; c.lineWidth = w; c.lineCap = "round";
+  c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2 - Math.cos(a) * hd * .7, y2 - Math.sin(a) * hd * .7); c.stroke();
+  c.beginPath(); c.moveTo(x2, y2);
+  c.lineTo(x2 - hd * Math.cos(a - .5), y2 - hd * Math.sin(a - .5));
+  c.lineTo(x2 - hd * Math.cos(a + .5), y2 - hd * Math.sin(a + .5)); c.closePath(); c.fill();
+}
+function trailColor(i, n, t) {
+  const f = i / n;
+  switch (SET.trail) {
+    case "rainbow": return `hsla(${(i * 4 + t * 120) % 360},95%,62%,${f * .9})`;
+    case "fire": return `hsla(${10 + f * 45},100%,${45 + f * 20}%,${f * .9})`;
+    case "plasma": return `hsla(${260 + Math.sin(i * .2 + t * 4) * 40},90%,${60 + f * 15}%,${f * .9})`;
+    default: return P.q > 0 ? `rgba(255,107,107,${f * .85})` : `rgba(77,216,255,${f * .85})`;
+  }
+}
+
+function drawDust(t) {
+  ctx.fillStyle = theme.dust;
+  for (const d of dust) {
+    const x = sx(d.x), y = sy(d.y); if (x < -10 || y < -10 || x > W + 10 || y > H + 10) continue;
+    ctx.globalAlpha = .22 + .22 * Math.sin(t * 2 + d.ph);
+    ctx.beginPath(); ctx.arc(x, y, d.r * scale, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawTiles(t) {
+  ctx.drawImage(wallImg, sx(0), sy(0), mapW * scale, mapH * scale);
+  drawDust(t);
+  const x0 = Math.max(0, Math.floor(cam.x - W / 2 / scale) - 1), x1 = Math.min(mapW, Math.ceil(cam.x + W / 2 / scale) + 1);
+  const y0 = Math.max(0, Math.floor(cam.y - H / 2 / scale) - 1), y1 = Math.min(mapH, Math.ceil(cam.y + H / 2 / scale) + 1);
+  for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
+    const c = grid[y][x], px = sx(x), py = sy(y);
+    if (c === "A" || c === "D" || c === "F") {
+      const col = { A: "93,255,158", D: "192,132,252", F: "244,114,182" }[c];
+      const g = ctx.createLinearGradient(px, 0, px + scale, 0);
+      g.addColorStop(0, `rgba(${col},0)`); g.addColorStop(.5, `rgba(${col},${.3 + .12 * Math.sin(t * 5 + y)})`); g.addColorStop(1, `rgba(${col},0)`);
+      ctx.fillStyle = g; ctx.fillRect(px - scale * .3, py, scale * 1.6, scale + 1);
+      ctx.strokeStyle = `rgba(${col},.8)`; ctx.lineWidth = 1.5 * dpr;
+      for (let k = 0; k < 3; k++) { const yy = py + ((t * 40 * dpr + k * scale / 3) % scale); ctx.beginPath(); ctx.moveTo(px + scale * .2, yy); ctx.lineTo(px + scale * .8, yy); ctx.stroke(); }
+      // emitter housings where the gate meets a wall
+      for (const [dy, yy] of [[-1, py], [1, py + scale]]) if (cellAt(x + .5, y + .5 + dy) === "#") {
+        const hy = dy < 0 ? yy - scale * .12 : yy - scale * .1;
+        const mg = ctx.createLinearGradient(px, hy, px, hy + scale * .22); mg.addColorStop(0, "#8b97ab"); mg.addColorStop(1, "#2a3140");
+        ctx.fillStyle = mg; ctx.fillRect(px + scale * .12, hy, scale * .76, scale * .22);
+        ctx.fillStyle = `rgba(${col},1)`; ctx.shadowColor = `rgb(${col})`; ctx.shadowBlur = SET.hq ? 10 * dpr : 0;
+        ctx.fillRect(px + scale * .3, hy + (dy < 0 ? scale * .17 : 0), scale * .4, scale * .05); ctx.shadowBlur = 0;
+      }
+      ctx.fillStyle = `rgba(${col},1)`; ctx.font = `800 ${scale * .34}px Rajdhani, Inter, system-ui`;
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText(c === "A" ? "⚡+" : c === "D" ? "⚡−" : "±", px + scale / 2, py + scale / 2);
+    } else if (c === "C") {
+      const on = cpActive === x + "," + y, cx = px + scale / 2, cy = py + scale / 2;
+      ctx.strokeStyle = on ? "#4fd6ff" : "rgba(79,214,255,.4)"; ctx.lineWidth = 2 * dpr;
+      ctx.beginPath(); ctx.arc(cx, cy, scale * .36, 0, Math.PI * 2); ctx.stroke();
+      ctx.save(); ctx.translate(cx, cy); ctx.rotate(t * (on ? 2 : .6));
+      for (let k = 0; k < 4; k++) { ctx.rotate(Math.PI / 2); ctx.fillStyle = on ? "#4fd6ff" : "rgba(79,214,255,.4)"; ctx.fillRect(scale * .22, -scale * .03, scale * .1, scale * .06); }
+      ctx.restore();
+      ctx.fillStyle = on ? "#4fd6ff" : "rgba(79,214,255,.5)"; ctx.font = `700 ${scale * .16}px Share Tech Mono, monospace`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText("CP", cx, cy);
+    }
+  }
+  ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+
+  if (portalActive()) drawPortal(sx(portal.x), sy(portal.y), scale * 1.05, t);
+  if (orbsActive()) for (const o of orbs) if (!o.got) drawOrb(sx(o.x), sy(o.y) + Math.sin(t * 3 + o.ph) * 3 * dpr, scale * .17, t, o.ph);
+}
+
+function drawPortal(px, py, R, t) {
+  // metal ring housing with bolts
+  ctx.strokeStyle = "#3a4458"; ctx.lineWidth = R * .22; ctx.beginPath(); ctx.arc(px, py, R * 1.05, 0, Math.PI * 2); ctx.stroke();
+  ctx.strokeStyle = "#8b97ab"; ctx.lineWidth = 1.5 * dpr; ctx.beginPath(); ctx.arc(px, py, R * 1.16, 0, Math.PI * 2); ctx.stroke();
+  for (let k = 0; k < 12; k++) { const a = k * Math.PI / 6; ctx.fillStyle = k % 3 ? "#9aa6ba" : "#a78bfa"; ctx.beginPath(); ctx.arc(px + Math.cos(a) * R * 1.05, py + Math.sin(a) * R * 1.05, R * .045, 0, 7); ctx.fill(); }
+  const g = ctx.createRadialGradient(px, py, 0, px, py, R);
+  g.addColorStop(0, "rgba(255,255,255,.95)"); g.addColorStop(.2, "rgba(196,181,253,.85)"); g.addColorStop(.7, "rgba(109,40,217,.55)"); g.addColorStop(1, "rgba(30,10,60,.9)");
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(px, py, R * .95, 0, Math.PI * 2); ctx.fill();
+  for (let k = 0; k < 6; k++) {
+    ctx.strokeStyle = `hsla(${260 + k * 15},90%,${75 - k * 5}%,${.85 - k * .1})`; ctx.lineWidth = (3.5 - k * .4) * dpr;
+    ctx.beginPath(); ctx.arc(px, py, R * (.2 + k * .12), -t * (2 + k * .5) + k, -t * (2 + k * .5) + k + Math.PI * 1.2); ctx.stroke();
+  }
+  if (portal) { ctx.fillStyle = "#e9d5ff";
+    for (const b of portal.bits) { b.r -= .004 * b.s; if (b.r < .05) b.r = 1; const a = b.a + t * b.s * 2 + (1 - b.r) * 3;
+      ctx.globalAlpha = b.r; ctx.fillRect(px + Math.cos(a) * R * .9 * b.r, py + Math.sin(a) * R * .9 * b.r, 2.5 * dpr, 2.5 * dpr); }
+    ctx.globalAlpha = 1; }
+  ctx.fillStyle = "rgba(233,213,255,.85)"; ctx.font = `700 ${Math.max(9 * dpr, R * .16)}px Share Tech Mono, monospace`; ctx.textAlign = "center";
+  ctx.fillText("EXIT", px, py + R * 1.5); ctx.textAlign = "left";
+}
+function drawOrb(px, py, r, t, ph) {
+  const g = ctx.createRadialGradient(px, py, 0, px, py, r * 3.2);
+  g.addColorStop(0, "rgba(250,204,21,.5)"); g.addColorStop(1, "rgba(250,204,21,0)");
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(px, py, r * 3.2, 0, Math.PI * 2); ctx.fill();
+  const g2 = ctx.createRadialGradient(px - r * .3, py - r * .3, 0, px, py, r);
+  g2.addColorStop(0, "#fffbe6"); g2.addColorStop(.5, "#fde047"); g2.addColorStop(1, "#b45309");
+  ctx.fillStyle = g2; ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = "rgba(255,255,255,.6)"; ctx.lineWidth = 1 * dpr; ctx.beginPath(); ctx.arc(px, py, r * .8, -2.4, -1.4); ctx.stroke();
+  ctx.strokeStyle = "rgba(253,224,71,.7)"; ctx.lineWidth = 1.5 * dpr;
+  ctx.beginPath(); ctx.ellipse(px, py, r * 1.9, r * .6, t * 1.5 + ph, 0, Math.PI * 2); ctx.stroke();
+}
+
+function drawParticle(t) {
+  const pc = P.q > 0 ? [255, 107, 107] : [77, 216, 255];
+  ctx.lineCap = "round";
+  if (SET.hq) ctx.globalCompositeOperation = "lighter";
+  for (let i = 1; i < trail.length; i++) {
+    ctx.strokeStyle = trailColor(i, trail.length, t); ctx.lineWidth = (1 + 6 * i / trail.length) * dpr;
+    ctx.beginPath(); ctx.moveTo(sx(trail[i - 1][0]), sy(trail[i - 1][1])); ctx.lineTo(sx(trail[i][0]), sy(trail[i][1])); ctx.stroke();
+  }
+  ctx.globalCompositeOperation = "source-over";
+  if (deadT > 0) return;
+  const px = sx(P.x), py = sy(P.y);
+  if (Bnow !== 0) {
+    const col = Bnow < 0 ? "#5b86ff" : "#ffa63d";
+    const r = radius(P, Bnow), [fx_, fy_] = forceVec(P, Bnow), fl = Math.hypot(fx_, fy_);
+    const cx = sx(P.x + fx_ / fl * r), cy = sy(P.y + fy_ / fl * r);
+    if (SET.circle) {
+      ctx.strokeStyle = col + "aa"; ctx.lineWidth = 1.6 * dpr; ctx.setLineDash([7 * dpr, 7 * dpr]); ctx.lineDashOffset = -t * 30 * dpr;
+      ctx.beginPath(); ctx.arc(cx, cy, r * scale, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = col; ctx.beginPath(); ctx.arc(cx, cy, 3 * dpr, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = col + "55"; ctx.lineWidth = 1 * dpr; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(cx, cy); ctx.stroke();
+      ctx.fillStyle = col; ctx.font = `600 ${11 * dpr}px Share Tech Mono, monospace`; ctx.fillText(`r=${r.toFixed(2)}m`, (px + cx) / 2 + 6 * dpr, (py + cy) / 2);
+    }
+    ctx.strokeStyle = ctx.fillStyle = col; ctx.lineWidth = 2 * dpr;
+    for (let k = 0; k < 10; k++) {
+      const a = k * Math.PI / 5 + t * .9, rr = scale * (1.05 + .08 * Math.sin(t * 6 + k)), qx = px + Math.cos(a) * rr, qy = py + Math.sin(a) * rr, s = scale * .09;
+      if (Bnow < 0) { ctx.beginPath(); ctx.moveTo(qx - s, qy - s); ctx.lineTo(qx + s, qy + s); ctx.moveTo(qx + s, qy - s); ctx.lineTo(qx - s, qy + s); ctx.stroke(); }
+      else { ctx.beginPath(); ctx.arc(qx, qy, s * .6, 0, Math.PI * 2); ctx.fill(); }
+    }
+    if (SET.vectors) arrow(ctx, px, py, px + fx_ / fl * scale * 1.35, py + fy_ / fl * scale * 1.35, "#ff5d5d", 3.5 * dpr);
+  }
+  const v = speed(P);
+  if (SET.vectors) arrow(ctx, px, py, px + P.vx / v * scale * (.7 + v * .15), py + P.vy / v * scale * (.7 + v * .15), "#5dff9e", 3.5 * dpr);
+  const R = scale * R_P;
+  if (boss && boss.inv > 0 && Math.floor(t * 12) % 2) return;
+  const halo = ctx.createRadialGradient(px, py, 0, px, py, R * 4);
+  halo.addColorStop(0, `rgba(${pc},.6)`); halo.addColorStop(1, `rgba(${pc},0)`);
+  ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(px, py, R * 4, 0, Math.PI * 2); ctx.fill();
+  const core = ctx.createRadialGradient(px - R * .35, py - R * .35, 0, px, py, R);
+  core.addColorStop(0, "#ffffff"); core.addColorStop(.45, `rgb(${pc})`); core.addColorStop(1, P.q > 0 ? "#b91c1c" : "#0369a1");
+  ctx.fillStyle = core; ctx.beginPath(); ctx.arc(px, py, R, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#0a0f1c"; ctx.font = `900 ${scale * .3}px Inter, system-ui`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText(P.q > 0 ? "+" : "−", px, py + 1); ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+}
+
+function drawSparksPopups() {
+  if (SET.hq) ctx.globalCompositeOperation = "lighter";
+  for (const s of sparks) {
+    ctx.globalAlpha = Math.max(0, Math.min(1, s.life * 1.5)); ctx.fillStyle = s.color;
+    ctx.beginPath(); ctx.arc(sx(s.x), sy(s.y), s.sz * dpr * Math.max(.3, s.life), 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over";
+  ctx.textAlign = "center"; ctx.font = `700 ${16 * dpr}px Share Tech Mono, monospace`;
+  for (const p of popups) { ctx.globalAlpha = Math.min(1, p.life); ctx.fillStyle = p.color; ctx.fillText(p.text, sx(p.x), sy(p.y - (1.2 - p.life) * .8)); }
+  ctx.globalAlpha = 1; ctx.textAlign = "left";
+}
+
+// ---- boss arena ----
+function drawBossArena(t) {
+  const R = BOSS.R * scale, cx = sx(0), cy = sy(0), gw = BOSS.gap * scale;
+  // floor disc
+  const fl = ctx.createRadialGradient(cx, cy, 0, cx, cy, R);
+  fl.addColorStop(0, "rgba(40,12,24,.75)"); fl.addColorStop(1, "rgba(14,8,16,.8)");
+  ctx.fillStyle = fl; ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.fill();
+  // two dees (copper electrodes)
+  for (const side of [-1, 1]) {
+    ctx.save(); ctx.beginPath(); ctx.rect(side < 0 ? cx - R : cx + gw, cy - R, R - gw, R * 2); ctx.clip();
+    const g = ctx.createRadialGradient(cx - R * .3, cy - R * .4, R * .1, cx, cy, R);
+    g.addColorStop(0, side < 0 ? "rgba(224,138,60,.35)" : "rgba(120,140,170,.35)"); g.addColorStop(1, side < 0 ? "rgba(90,42,12,.35)" : "rgba(40,50,70,.35)");
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, R * .96, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,.06)"; ctx.lineWidth = 1 * dpr;
+    for (let k = 1; k <= 6; k++) { ctx.beginPath(); ctx.arc(cx, cy, R * k / 6.3, 0, Math.PI * 2); ctx.stroke(); }
+    ctx.restore();
+  }
+  // field symbols
+  ctx.strokeStyle = "rgba(91,134,255,.25)"; ctx.lineWidth = 1.5 * dpr;
+  for (let x = -6; x <= 6; x++) for (let y = -6; y <= 6; y++) {
+    if (Math.hypot(x, y) > BOSS.R - .5 || Math.abs(x) < 1) continue;
+    const qx = sx(x), qy = sy(y), s = scale * .07;
+    ctx.beginPath(); ctx.moveTo(qx - s, qy - s); ctx.lineTo(qx + s, qy + s); ctx.moveTo(qx + s, qy - s); ctx.lineTo(qx - s, qy + s); ctx.stroke();
+  }
+  // gap with oscillating E field (in sync with the particle)
+  const eDir = P.y > 0 ? 1 : -1, ready = boss.inGap && !boss.kicked;
+  ctx.fillStyle = ready ? "rgba(93,255,158,.32)" : "rgba(93,255,158,.12)"; ctx.fillRect(cx - gw, cy - R, gw * 2, R * 2);
+  for (let k = -5; k <= 5; k++) {
+    const yy = cy + k * R / 5.5, ph = ((t * 2) % 1);
+    arrow(ctx, cx - gw * .8 * eDir, yy, cx + gw * (.8 - ph * .3) * eDir, yy, `rgba(93,255,158,${.5 + .3 * Math.sin(t * 6 + k)})`, 2 * dpr);
+  }
+  ctx.fillStyle = "rgba(93,255,158,.8)"; ctx.font = `700 ${12 * dpr}px Share Tech Mono, monospace`; ctx.textAlign = "center";
+  ctx.fillText("E-GAP", cx, cy - R - 10 * dpr);
+  // outer containment ring
+  ctx.strokeStyle = "#2a2230"; ctx.lineWidth = scale * .5; ctx.beginPath(); ctx.arc(cx, cy, R + scale * .25, 0, Math.PI * 2); ctx.stroke();
+  ctx.strokeStyle = boss.ready ? "#5dff9e" : theme.edge; ctx.shadowColor = ctx.strokeStyle; ctx.shadowBlur = SET.hq ? 18 * dpr : 0; ctx.lineWidth = 3 * dpr;
+  ctx.setLineDash(boss.ready ? [14 * dpr, 10 * dpr] : []); ctx.lineDashOffset = -t * 40 * dpr;
+  ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); ctx.shadowBlur = 0;
+  for (let k = 0; k < 24; k++) { const a = k * Math.PI / 12; ctx.fillStyle = "#9aa6ba"; ctx.beginPath(); ctx.arc(cx + Math.cos(a) * (R + scale * .25), cy + Math.sin(a) * (R + scale * .25), scale * .06, 0, 7); ctx.fill(); }
+  // magnet coil labels
+  ctx.fillStyle = "rgba(255,255,255,.35)"; ctx.font = `700 ${11 * dpr}px Share Tech Mono, monospace`;
+  ctx.fillText("DEE-1", cx - R * .55, cy + R * .85); ctx.fillText("DEE-2", cx + R * .55, cy + R * .85);
+  // core
+  const hp = 1 - bossEnergy(), pulse = 1 + .08 * Math.sin(t * 6) + (boss.coreFlash > 0 ? .15 : 0);
+  if (!boss.won) {
+    const cg = ctx.createRadialGradient(cx, cy, 0, cx, cy, scale * 1.4 * pulse);
+    cg.addColorStop(0, "#fff"); cg.addColorStop(.18, "#fda4af"); cg.addColorStop(.45, "rgba(225,29,72,.7)"); cg.addColorStop(1, "rgba(225,29,72,0)");
+    ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(cx, cy, scale * 1.4 * pulse, 0, Math.PI * 2); ctx.fill();
+    for (let k = 0; k < 3; k++) {
+      ctx.save(); ctx.translate(cx, cy); ctx.rotate(t * (k % 2 ? -1.5 : 1) * (1 + boss.phase * .4) + k);
+      ctx.strokeStyle = ["#fb7185", "#fbbf24", "#f0abfc"][k]; ctx.lineWidth = 3 * dpr;
+      for (let s = 0; s < 3; s++) { ctx.beginPath(); ctx.arc(0, 0, scale * (.55 + k * .14), s * 2.1, s * 2.1 + 1.2); ctx.stroke(); }
+      ctx.restore();
+    }
+    ctx.strokeStyle = "#ff5d5d"; ctx.lineWidth = 4 * dpr; ctx.beginPath(); ctx.arc(cx, cy, scale * 1.05, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * hp); ctx.stroke();
+  }
+  ctx.textAlign = "left";
+  // projectiles
+  for (const p of boss.proj) {
+    ctx.strokeStyle = "rgba(255,93,93,.5)"; ctx.lineWidth = 3 * dpr; ctx.beginPath();
+    p.tr.forEach((q, i) => i ? ctx.lineTo(sx(q[0]), sy(q[1])) : ctx.moveTo(sx(q[0]), sy(q[1]))); ctx.stroke();
+    const g = ctx.createRadialGradient(sx(p.x), sy(p.y), 0, sx(p.x), sy(p.y), scale * .3);
+    g.addColorStop(0, "#fff"); g.addColorStop(.35, "#ff5d5d"); g.addColorStop(1, "rgba(255,93,93,0)");
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(sx(p.x), sy(p.y), scale * .3, 0, Math.PI * 2); ctx.fill();
+  }
+  // kick prompt
+  if (deadT <= 0 && !boss.won) {
+    const near = Math.abs(P.x) < BOSS.gap + 1.2 && !boss.kicked;
+    if (near) { ctx.font = `800 ${15 * dpr}px Orbitron, Rajdhani, sans-serif`; ctx.textAlign = "center";
+      ctx.fillStyle = ready ? "#5dff9e" : "rgba(255,255,255,.55)"; ctx.fillText(ready ? "⚡ KICK!" : T("ready"), sx(P.x), sy(P.y) - scale * .7); ctx.textAlign = "left"; }
+  }
+  $("padK").classList.toggle("ready", !!ready);
+}
+
+// =====================================================================
+//  RENDER: menu attract (live E × B drift)
+// =====================================================================
+let attract = [];
+function makeAttract() {
+  const cols = ["#ff6b6b", "#4dd8ff", "#facc15", "#a78bfa", "#5dff9e", "#f472b6", "#fb923c", "#4fd6ff"];
+  attract = Array.from({ length: 10 }, (_, i) => {
+    const sgn = i % 2 ? -1 : 1, sp = (60 + Math.random() * 90) * dpr;
+    return { x: Math.random() * W, y: H * (.12 + .76 * (i / 9)), vx: sp, vy: 0, w: sgn * (.9 + Math.random() * .8), col: sgn > 0 ? cols[i % 8] : cols[(i + 3) % 8], tr: [] };
+  });
+}
+function drawAttract(t, dt) {
+  theme = THEMES[0]; scale = baseScale;
+  drawBackground(t, Math.sin(t * .05) * 20, Math.cos(t * .04) * 10);
+  const step = 64 * dpr;
+  ctx.strokeStyle = "rgba(91,134,255,.1)"; ctx.lineWidth = 1.5 * dpr;
+  for (let x = step / 2; x < W; x += step) for (let y = step / 2; y < H; y += step) {
+    const s = 5 * dpr * (1 + .25 * Math.sin(t * 1.5 + x * .01 + y * .01));
+    ctx.beginPath(); ctx.moveTo(x - s, y - s); ctx.lineTo(x + s, y + s); ctx.moveTo(x + s, y - s); ctx.lineTo(x - s, y + s); ctx.stroke();
+  }
+  const E = 70 * dpr;
+  for (const p of attract) {
+    const n = 4, h = dt / n;
+    for (let i = 0; i < n; i++) {
+      const c = Math.cos(p.w * h), s = Math.sin(p.w * h);
+      const vx = p.vx * c - p.vy * s, vy = p.vx * s + p.vy * c;
+      p.vx = vx; p.vy = vy + Math.sign(p.w) * E * h;
+      p.x += p.vx * h; p.y += p.vy * h;
+    }
+    if (p.x > W + 60) { p.x -= W + 120; p.tr = []; } if (p.x < -60) { p.x += W + 120; p.tr = []; }
+    p.tr.push([p.x, p.y]); if (p.tr.length > 160) p.tr.shift();
+    ctx.globalCompositeOperation = "lighter"; ctx.lineCap = "round";
+    for (let i = 1; i < p.tr.length; i++) {
+      ctx.strokeStyle = p.col; ctx.globalAlpha = i / p.tr.length * .7; ctx.lineWidth = (1 + 3 * i / p.tr.length) * dpr;
+      ctx.beginPath(); ctx.moveTo(p.tr[i - 1][0], p.tr[i - 1][1]); ctx.lineTo(p.tr[i][0], p.tr[i][1]); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, 16 * dpr);
+    g.addColorStop(0, "#fff"); g.addColorStop(.3, p.col); g.addColorStop(1, p.col + "00");
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y, 16 * dpr, 0, Math.PI * 2); ctx.fill();
+    ctx.globalCompositeOperation = "source-over";
+  }
+  const v = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * .3, W / 2, H / 2, Math.max(W, H) * .8);
+  v.addColorStop(0, "rgba(0,0,0,0)"); v.addColorStop(1, "rgba(0,0,0,.6)");
+  ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
+}
+
+// =====================================================================
+//  RENDER: frame
+// =====================================================================
+const inGame = () => ["play", "lesson", "done", "paused", "tutdone", "finale"].includes(state) && P;
+function draw(now, dt) {
+  const t = now / 1000;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  if (!inGame()) { drawAttract(t, dt); return; }
+  if (mode === "boss") { scale = Math.min(W, H) / 15.5; cam.x = 0; cam.y = 0; }
+  else {
+    scale = baseScale;
+    const tx = P.x + P.vx * .35, ty = P.y + P.vy * .35;
+    cam.x += (tx - cam.x) * Math.min(1, dt * 5); cam.y += (ty - cam.y) * Math.min(1, dt * 5);
+  }
+  ctx.save();
+  if (shake > 0) ctx.translate((Math.random() - .5) * 18 * dpr * shake, (Math.random() - .5) * 18 * dpr * shake);
+  drawBackground(t, cam.x, cam.y);
+  if (state === "play" && Bnow !== 0 && deadT <= 0) {
+    const col = Bnow < 0 ? "91,134,255" : "255,166,61";
+    const g = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * .3, W / 2, H / 2, Math.max(W, H) * .75);
+    g.addColorStop(0, `rgba(${col},0)`); g.addColorStop(1, `rgba(${col},.22)`);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  }
+  if (mode === "boss") { drawDust(t); drawBossArena(t); } else drawTiles(t);
+  drawParticle(t);
+  drawSparksPopups();
+  ctx.restore();
+  if (flash) { ctx.fillStyle = `rgba(${flash.c},${flash.t * .45})`; ctx.fillRect(0, 0, W, H); }
+  // vignette
+  const v = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * .45, W / 2, H / 2, Math.max(W, H) * .78);
+  v.addColorStop(0, "rgba(0,0,0,0)"); v.addColorStop(1, "rgba(0,0,0,.5)"); ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
+}
+
+function drawFX(dt) {
+  fctx.clearRect(0, 0, W, H);
+  for (const c of confetti) {
+    c.vy += 600 * dpr * dt; c.x += c.vx * dt; c.y += c.vy * dt; c.rot += c.vr * dt; c.life -= dt;
+    fctx.save(); fctx.translate(c.x, c.y); fctx.rotate(c.rot); fctx.globalAlpha = Math.min(1, c.life);
+    fctx.fillStyle = c.col; fctx.fillRect(-c.w / 2, -c.h / 2, c.w, c.h); fctx.restore();
+  }
+  confetti = confetti.filter(c => c.life > 0 && c.y < H + 40);
+}
+function popConfetti() {
+  const cols = ["#4fd6ff", "#a78bfa", "#f472b6", "#facc15", "#5dff9e", "#fb923c"];
+  for (let i = 0; i < (SET.hq ? 160 : 70); i++) {
+    const side = i % 2;
+    confetti.push({ x: side ? W * .1 : W * .9, y: H * .75, vx: (side ? 1 : -1) * (200 + Math.random() * 500) * dpr, vy: -(500 + Math.random() * 700) * dpr,
+      rot: Math.random() * 6, vr: (Math.random() - .5) * 12, w: (6 + Math.random() * 6) * dpr, h: (3 + Math.random() * 4) * dpr, col: cols[i % cols.length], life: 3 + Math.random() });
+  }
+}
+
+// =====================================================================
+//  HUD instruments
+// =====================================================================
+function drawGauge() {
+  const c = $("gauge"), g = c.getContext("2d"), w = c.width, h = c.height; if (!w || !P) return;
+  g.clearRect(0, 0, w, h);
+  const cx = w / 2, cy = h * .82, R = Math.min(w * .42, h * .72), a0 = Math.PI * .85, a1 = Math.PI * 2.15, vmax = 12;
+  const v = speed(P), ang = a0 + (a1 - a0) * Math.min(1, v / vmax);
+  g.lineWidth = 10 * dpr; g.strokeStyle = "#0a0e15"; g.beginPath(); g.arc(cx, cy, R, a0, a1); g.stroke();
+  const zones = [[0, 4.5, "#5dff9e"], [4.5, 9, "#ffb547"], [9, 12, "#ff5d5d"]];
+  for (const [z0, z1, col] of zones) { g.strokeStyle = col + "55"; g.lineWidth = 6 * dpr; g.beginPath(); g.arc(cx, cy, R, a0 + (a1 - a0) * z0 / vmax, a0 + (a1 - a0) * z1 / vmax); g.stroke(); }
+  g.strokeStyle = "#4fd6ff"; g.shadowColor = "#4fd6ff"; g.shadowBlur = 10 * dpr; g.lineWidth = 6 * dpr; g.beginPath(); g.arc(cx, cy, R, a0, ang); g.stroke(); g.shadowBlur = 0;
+  g.fillStyle = "#8796b0"; g.font = `${9 * dpr}px Share Tech Mono, monospace`; g.textAlign = "center"; g.textBaseline = "middle";
+  for (let k = 0; k <= vmax; k += 1) {
+    const a = a0 + (a1 - a0) * k / vmax, big = k % 3 === 0;
+    g.strokeStyle = big ? "#c7d0de" : "#4a566c"; g.lineWidth = (big ? 2 : 1) * dpr;
+    g.beginPath(); g.moveTo(cx + Math.cos(a) * (R - 9 * dpr), cy + Math.sin(a) * (R - 9 * dpr)); g.lineTo(cx + Math.cos(a) * (R - (big ? 17 : 13) * dpr), cy + Math.sin(a) * (R - (big ? 17 : 13) * dpr)); g.stroke();
+    if (big) g.fillText(k, cx + Math.cos(a) * (R - 27 * dpr), cy + Math.sin(a) * (R - 27 * dpr));
+  }
+  g.strokeStyle = "#ff5d5d"; g.lineWidth = 2.5 * dpr; g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(ang) * (R - 6 * dpr), cy + Math.sin(ang) * (R - 6 * dpr)); g.stroke();
+  g.fillStyle = "#c7d0de"; g.beginPath(); g.arc(cx, cy, 5 * dpr, 0, 7); g.fill();
+  g.fillStyle = "#5dff9e"; g.font = `${20 * dpr}px Share Tech Mono, monospace`; g.fillText(v.toFixed(2), cx, cy - R * .42);
+  g.fillStyle = "#8796b0"; g.font = `${9 * dpr}px Rajdhani, sans-serif`; g.fillText("SPEED  m/s", cx, cy - R * .2);
+  g.textAlign = "left"; g.textBaseline = "alphabetic";
+}
+function drawMini() {
+  const c = $("mini"), m = c.getContext("2d"), w = c.width, h = c.height; if (!w || !P) return;
+  m.clearRect(0, 0, w, h);
+  const cx = w / 2, cy = h / 2, col = Bnow < 0 ? "#5b86ff" : Bnow > 0 ? "#ffa63d" : "#3a4560";
+  m.strokeStyle = m.fillStyle = col; m.lineWidth = 1.4 * dpr;
+  for (let i = 0; i < 5; i++) for (let j = 0; j < 3; j++) {
+    const x = w * (.1 + i * .2), y = h * (.17 + j * .33), r = h * .05;
+    if (Bnow < 0) { m.beginPath(); m.moveTo(x - r, y - r); m.lineTo(x + r, y + r); m.moveTo(x + r, y - r); m.lineTo(x - r, y + r); m.stroke(); }
+    else if (Bnow > 0) { m.beginPath(); m.arc(x, y, r * .6, 0, Math.PI * 2); m.fill(); }
+    else { m.globalAlpha = .5; m.fillRect(x - 1, y - 1, 2, 2); m.globalAlpha = 1; }
+  }
+  const v = speed(P), ux = P.vx / v, uy = P.vy / v, L = h * .4;
+  arrow(m, cx, cy, cx + ux * L, cy + uy * L, "#5dff9e", 3 * dpr);
+  m.font = `${h * .14}px Share Tech Mono, monospace`; m.fillStyle = "#5dff9e"; m.fillText("v", cx + ux * L * 1.08 + 2, cy + uy * L * 1.08 - 2);
+  if (Bnow !== 0) {
+    const [fx_, fy_] = forceVec(P, Bnow), fl = Math.hypot(fx_, fy_);
+    arrow(m, cx, cy, cx + fx_ / fl * L, cy + fy_ / fl * L, "#ff5d5d", 3 * dpr);
+    m.fillStyle = "#ff5d5d"; m.fillText("F", cx + fx_ / fl * L * 1.08 + 2, cy + fy_ / fl * L * 1.08 - 2);
+  }
+  m.fillStyle = P.q > 0 ? "#ff6b6b" : "#4dd8ff"; m.beginPath(); m.arc(cx, cy, h * .07, 0, Math.PI * 2); m.fill();
+  m.fillStyle = col; m.font = `${h * .12}px Share Tech Mono, monospace`; m.fillText(Bnow < 0 ? "B ⊗" : Bnow > 0 ? "B ⊙" : "B = 0", 6 * dpr, h - 6 * dpr);
+}
+function drawRadar(t) {
+  const c = $("radar"), g = c.getContext("2d"), w = c.width, h = c.height; if (!w || !P) return;
+  g.fillStyle = "#020604"; g.fillRect(0, 0, w, h);
+  let toX, toY;
+  if (mode === "boss") {
+    const s = Math.min(w, h) / (BOSS.R * 2.3); toX = x => w / 2 + x * s; toY = y => h / 2 + y * s;
+    g.strokeStyle = "rgba(93,255,158,.5)"; g.lineWidth = 1.5 * dpr; g.beginPath(); g.arc(w / 2, h / 2, BOSS.R * s, 0, 7); g.stroke();
+    g.fillStyle = "rgba(93,255,158,.15)"; g.fillRect(w / 2 - BOSS.gap * s, h / 2 - BOSS.R * s, BOSS.gap * 2 * s, BOSS.R * 2 * s);
+    g.fillStyle = "#ff5d5d"; g.beginPath(); g.arc(w / 2, h / 2, 3 * dpr, 0, 7); g.fill();
+    for (const p of boss.proj) { g.fillRect(toX(p.x) - 1.5 * dpr, toY(p.y) - 1.5 * dpr, 3 * dpr, 3 * dpr); }
+  } else {
+    const s = Math.min(w / mapW, h / mapH), ox = (w - mapW * s) / 2, oy = (h - mapH * s) / 2;
+    toX = x => ox + x * s; toY = y => oy + y * s;
+    g.drawImage(radarImg, ox, oy, mapW * s, mapH * s);
+    if (orbsActive()) { g.fillStyle = "#facc15"; for (const o of orbs) if (!o.got) g.fillRect(toX(o.x) - 1.5 * dpr, toY(o.y) - 1.5 * dpr, 3 * dpr, 3 * dpr); }
+    if (portalActive()) { g.strokeStyle = "#a78bfa"; g.lineWidth = 1.5 * dpr; g.beginPath(); g.arc(toX(portal.x), toY(portal.y), 4 * dpr, 0, 7); g.stroke(); }
+  }
+  // sweep
+  const a = t * 2.2, R = Math.max(w, h);
+  const sg = g.createConicGradient ? g.createConicGradient(a, w / 2, h / 2) : null;
+  if (sg) { sg.addColorStop(0, "rgba(93,255,158,.18)"); sg.addColorStop(.12, "rgba(93,255,158,0)"); sg.addColorStop(1, "rgba(93,255,158,0)"); g.fillStyle = sg; g.fillRect(0, 0, w, h); }
+  g.strokeStyle = "rgba(93,255,158,.12)"; g.lineWidth = 1;
+  for (let k = 1; k < 4; k++) { g.beginPath(); g.arc(w / 2, h / 2, R * k / 6, 0, 7); g.stroke(); }
+  g.fillStyle = P.q > 0 ? "#ff6b6b" : "#4dd8ff"; g.shadowColor = g.fillStyle; g.shadowBlur = 8 * dpr;
+  g.beginPath(); g.arc(toX(P.x), toY(P.y), (2.5 + Math.abs(Math.sin(t * 6))) * dpr, 0, 7); g.fill(); g.shadowBlur = 0;
+  $("rPos").textContent = `x ${P.x.toFixed(1)} y ${P.y.toFixed(1)}`;
+}
+function drawScope() {
+  const c = $("scope"), g = c.getContext("2d"), w = c.width, h = c.height; if (!w) return;
+  g.fillStyle = "#020604"; g.fillRect(0, 0, w, h);
+  g.strokeStyle = "rgba(93,255,158,.1)"; g.lineWidth = 1;
+  for (let k = 1; k < 8; k++) { g.beginPath(); g.moveTo(w * k / 8, 0); g.lineTo(w * k / 8, h); g.stroke(); }
+  for (let k = 1; k < 4; k++) { g.beginPath(); g.moveTo(0, h * k / 4); g.lineTo(w, h * k / 4); g.stroke(); }
+  const fmax = 50;
+  const line = (idx, col, max) => { g.strokeStyle = col; g.shadowColor = col; g.shadowBlur = 6 * dpr; g.lineWidth = 1.8 * dpr; g.beginPath();
+    hist.forEach((p, i) => { const x = w * i / 219, y = h - 4 * dpr - (h - 10 * dpr) * Math.min(1, p[idx] / max); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.stroke(); g.shadowBlur = 0; };
+  line(1, "rgba(79,214,255,.7)", 12); line(0, "#5dff9e", fmax);
+  g.fillStyle = "#5dff9e"; g.font = `${9 * dpr}px Share Tech Mono, monospace`; g.fillText("|F|", 4 * dpr, 11 * dpr);
+  g.fillStyle = "#4fd6ff"; g.fillText("v", 26 * dpr, 11 * dpr);
+  $("sMax").textContent = `MAX ${stats.maxF.toFixed(1)}`;
+}
+
+function updateHUD(t) {
+  if (state !== "play" || !P) return;
+  const v = speed(P), aB = Math.abs(Bnow), aq = Math.abs(P.q), r = radius(P, Bnow);
+  const per = aB ? 2 * Math.PI * P.m / (aq * aB) : 0;
+  $("readouts").innerHTML =
+    `<div><small>CHARGE q</small><b>${P.q > 0 ? "+" : "−"}${aq.toFixed(1)} mC</b></div><div><small>MASS m</small><b>${P.m.toFixed(1)} g</b></div>` +
+    `<div><small>SPEED v</small><b>${v.toFixed(2)} m/s</b></div><div><small>FIELD |B|</small><b>${aB.toFixed(2)} T</b></div>` +
+    `<div><small>FORCE |q|vB</small><b>${(aq * v * aB).toFixed(1)} mN</b></div><div><small>RADIUS r</small><b>${aB ? r.toFixed(2) + " m" : "∞"}</b></div>` +
+    `<div class="wide"><small>${mode === "boss" ? "RF FREQUENCY f = |q|B/2πm" : "PERIOD T = 2πm/|q|B"}</small><b>${aB ? (mode === "boss" ? (1 / per).toFixed(3) + " Hz" : per.toFixed(2) + " s") : "—"}</b></div>`;
+  $("hTag").textContent = levelTag(); $("hName").textContent = levelName();
+  $("hTime").textContent = timeT.toFixed(1); $("hCrash").textContent = crashes; $("hScore").textContent = score;
+  if (mode === "boss") { $("hOrbsL").textContent = "HITS"; $("hOrbs").textContent = boss.hits; }
+  else { $("hOrbsL").textContent = "ORBS"; $("hOrbs").textContent = orbsActive() ? `${collected}/${orbs.length}` : "—"; }
+  const mm = Math.floor(timeT / 60), ss = Math.floor(timeT % 60);
+  $("tClock").textContent = `${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
+  $("ledIn").className = "led" + (Bnow < 0 ? " on-in" : ""); $("ledOut").className = "led" + (Bnow > 0 ? " on-out" : ""); $("ledOff").className = "led" + (Bnow === 0 ? " on-off" : "");
+  $("ledQ").className = "led " + (P.q > 0 ? "on-pos" : "on-neg"); $("ledQ").textContent = `q ${P.q > 0 ? "+" : "−"}`;
+  $("padL").classList.toggle("on", keyL); $("padR").classList.toggle("on", keyR);
+  $("padLtxt").textContent = mode === "boss" ? T("padLb") : T("padL");
+  $("padRtxt").textContent = mode === "boss" ? T("padRb") : T("padR");
+  if (mode === "boss") {
+    const e = bossEnergy();
+    $("coreBar").style.width = ((1 - e) * 100).toFixed(1) + "%"; $("coreTxt").textContent = Math.round((1 - e) * 100) + "%";
+    $("beamBar").style.width = Math.min(100, speed(P) / BOSS.vTarget * 100).toFixed(1) + "%";
+    $("beamTxt").textContent = `${speed(P).toFixed(1)} / ${BOSS.vTarget.toFixed(1)} m/s`;
+    $("bossPhase").textContent = boss.ready ? "▲ EXTRACTION READY ▲" : `${T("phase")} ${boss.phase} · ${["STABLE", "OVERLOAD", "MELTDOWN"][boss.phase - 1]}`;
+    $("bossPhase").style.color = boss.ready ? "#5dff9e" : "";
+  }
+  if (SET.hud === "full") { drawGauge(); drawMini(); drawRadar(t); drawScope(); }
+  else drawMini();
+}
+
+// =====================================================================
+//  SCREENS
+// =====================================================================
+const modal = $("modal"), card = $("card");
+const SCREENS = ["menu", "missions", "settings", "book", "editor"];
+function showScreen(id) {
+  for (const s of SCREENS) { $(s).classList.toggle("show", s === id); if (s !== id) $(s).innerHTML = ""; }
+  if (id) { modal.classList.remove("show"); document.body.classList.remove("playing", "tutorial", "boss"); }
+}
+function showModal(html) { card.innerHTML = html; modal.classList.add("show"); card.scrollTop = 0; }
+function hideModal() { modal.classList.remove("show"); }
+function applyBodyClasses() {
+  document.body.classList.toggle("compact", SET.hud === "compact");
+  $("scan").style.display = SET.scan ? "" : "none";
+}
+function startPlay() {
+  hideModal(); showScreen(null); state = "play";
+  document.body.classList.add("playing");
+  document.body.classList.toggle("tutorial", mode === "tut"); document.body.classList.toggle("boss", mode === "boss");
+  requestAnimationFrame(sizeHudCanvases);
+  if (mode === "tut") renderTut(); else banner(levelTag(), levelName());
+}
+const head = (title, sub, extra = "") => `<div class="phead"><span class="dot"></span>${title}<span class="r">${sub || ""}</span></div>${extra}`;
+
+// ---------- main menu ----------
+let factIdx = 0, factTimer = 0;
+function starsTxt(n, max = 3) { return "★".repeat(n) + "☆".repeat(max - n); }
+function showMenu() {
+  state = "menu"; P = null; boss = null; showScreen("menu"); makeAttract();
+  const items = [...LEVELS.map((L, i) => ({ i, nm: L[SET.lang].name })), { i: 4, nm: BOSS[SET.lang].name }];
+  const totalStars = PROG.stars.reduce((a, b) => a + b, 0);
+  const nav = [["play", "01", T("nPlay"), T("nPlaySub"), true], ["missions", "02", T("nMis"), T("nMisSub")], ["tut", "03", T("nTut"), T("nTutSub")],
+    ["lab", "04", T("nLab"), T("nLabSub")], ["book", "05", T("nBook"), T("nBookSub")], ["settings", "06", T("nSet"), T("nSetSub")]];
+  $("menu").innerHTML = `<div class="mgrid">
+    <div class="mtop console"><span class="mono" style="color:var(--amber);font-size:13px">◆ MAGNETO DRIFT // PARTICLE STEERING LAB</span>
+      <div class="sys"><span>SYS <b>ONLINE</b></span><span>FIELD COILS <b>READY</b></span><span>B<sub>max</sub> <b>2.00 T</b></span><span>VACUUM <b>1e-9 Pa</b></span></div>
+      <span class="ver">v4.0 · ${SET.lang.toUpperCase()}</span></div>
+    <div class="mleft">
+      <div class="console screw logo"><div class="row">${atomLogo()}<h1><span class="a">MAGNETO</span><span class="b">DRIFT</span></h1></div><p>${T("tagline")}</p></div>
+      <div class="console nav">${nav.map(([k, no, lb, sub, pr]) => `<button class="nbtn ${pr ? "primary" : ""}" data-go="${k}"><span class="no">${no}</span><span class="lb">${lb}<small>${sub}</small></span><span class="ar">▸</span></button>`).join("")}</div>
+      <div class="hazard"></div>
+    </div>
+    <div class="mcenter"><div class="feed"><i></i><i></i><i></i><i></i><span class="lbl">${T("feedLbl")}</span><span class="rec">REC</span>
+      <div class="cap"><span>${T("feedCap")}</span><span>B ⊗ 1.0 T · E ↓</span></div></div></div>
+    <div class="mright">
+      <div class="console screw">${head(T("progress"), `★ ${totalStars}/${NMIS * 3}`)}<div class="prog">
+        <div class="prow"><span class="n">TR</span><span>${SET.lang === "id" ? "Latihan" : "Training"}</span><span class="s ${PROG.tutorial ? "" : "off"}">${PROG.tutorial ? "✔ DONE" : "—"}</span></div>
+        ${items.map(it => `<div class="prow"><span class="n">${it.i === 4 ? "⚠" : "0" + (it.i + 1)}</span><span>${it.nm}</span><span class="s ${PROG.stars[it.i] ? "" : "off"}">${starsTxt(PROG.stars[it.i])}</span>
+          <div class="pbar"><i style="width:${PROG.stars[it.i] / 3 * 100}%"></i></div></div>`).join("")}</div></div>
+      <div class="console screw">${head(T("fact"), "PROF. ION")}<div class="profbox">${mascotSVG()}<div class="fact" id="fact"></div></div></div>
+      <div class="console screw">${head(T("consts"), "SI")}<div class="consts">
+        <div><span>e (elementary charge)</span><b>1.602×10⁻¹⁹ C</b></div><div><span>mₚ (proton)</span><b>1.673×10⁻²⁷ kg</b></div>
+        <div><span>mₑ (electron)</span><b>9.109×10⁻³¹ kg</b></div><div><span>μ₀</span><b>4π×10⁻⁷ T·m/A</b></div><div><span>B Earth</span><b>≈ 50 μT</b></div></div></div>
+    </div>
+    <div class="ticker console"><span>${T("facts").map(f => `<em>◆</em>${f}`).join("")}</span></div>
+  </div>`;
+  renderFact();
+  $("menu").querySelectorAll(".nbtn").forEach(b => b.onclick = () => {
+    Sound.init(); Sound.play("click");
+    const g = b.dataset.go;
+    if (g === "play") {
+      if (!PROG.tutorial) return showLesson("tut");
+      const nx = PROG.done.findIndex(d => !d);
+      return nx < 0 ? showMissions() : showLesson(nx === 4 ? "boss" : "level", nx);
+    }
+    if (g === "missions") showMissions();
+    if (g === "tut") showLesson("tut");
+    if (g === "lab") showEditor();
+    if (g === "book") showBook(0);
+    if (g === "settings") showSettings("menu");
+  });
+}
+function renderFact() { const f = $("fact"); if (f) f.innerHTML = `<b>💡 ${T("fact")}</b>${T("facts")[factIdx % T("facts").length]}`; }
+
+// ---------- mission select ----------
+function unlocked(i) { return SET.unlockAll || i === 0 || PROG.done[i - 1]; }
+function showMissions() {
+  state = "missions"; showScreen("missions");
+  const card = (kind, i, def, nm, chips, th, locked, best, stars, extra = "") => `
+    <button class="mcard console ${locked ? "locked" : ""}" data-kind="${kind}" data-i="${i}" style="--c:${th.edge};--glow:${th.edge}55">
+      <div class="th"><canvas data-thumb="${kind}:${i}"></canvas><span class="badge ${kind === "boss" ? "boss" : ""}">${kind === "boss" ? "⚠ BOSS" : kind === "tut" ? "TRAINING" : kind === "custom" ? T("custom").toUpperCase() : T("mission").toUpperCase() + " 0" + (i + 1)}</span></div>
+      <div class="info"><h3>${locked ? "🔒 " : ""}${nm}</h3><div class="chips">${chips.map(c => `<span class="chip">${c}</span>`).join("")}</div>
+      <div class="mmeta"><span class="diff">${[1, 2, 3, 4, 5].map(k => `<i class="${k <= (def.diff || 2) ? "on" : ""}"></i>`).join("")}</span><span>${th.name}</span>
+        <span class="st">${locked ? `<span style="color:var(--red);font-size:12px">${T("locked")}</span>` : stars}</span></div>
+      ${best ? `<div class="mmeta" style="margin-top:4px">${T("best")}: <span style="color:var(--green)">${best.toFixed(1)} s</span></div>` : ""}</div>${extra}</button>`;
+  const main = LEVELS.map((L, i) => card("level", i, L, L[SET.lang].name, L[SET.lang].chips, THEMES[L.theme], !unlocked(i), PROG.best[i], starsTxt(PROG.stars[i]))).join("");
+  const tut = card("tut", 0, { diff: 1 }, "Prof. Ion", SET.lang === "id" ? ["kontrol", "dasar"] : ["controls", "basics"], THEMES[0], false, 0, PROG.tutorial ? "✔" : "");
+  const bossC = card("boss", 4, BOSS, BOSS[SET.lang].name, BOSS[SET.lang].chips, THEMES[5], !unlocked(4), PROG.best[4], starsTxt(PROG.stars[4]));
+  const cust = CUSTOM.length ? CUSTOM.map((c, i) => card("custom", i, { diff: 2 }, c.name || T("untitled"), [`${c.map[0].length}×${c.map.length}`], THEMES[c.theme] || THEMES[0], false, 0, "",
+    `<div class="custrow"><span class="cbtn" data-cedit="${i}">✎ ${T("edit")}</span></div>`)).join("") : `<div class="muted" style="padding:8px">${T("noCustom")}</div>`;
+  $("missions").innerHTML = `<div class="wrap">
+    <div class="titlebar console"><button class="cbtn back">${T("back")}</button><h2>${T("misTitle")}<small>${T("misSub")}</small></h2><button class="cbtn" id="toLab">✎ ${T("nLab")}</button></div>
+    <div class="sect">${T("sMain")}</div><div class="mgrid2">${tut}${main}</div>
+    <div class="sect">${T("sBoss")}</div><div class="mgrid2">${bossC}</div>
+    <div class="sect">${T("sCustom")}</div><div class="mgrid2">${cust}</div></div>`;
+  const root = $("missions");
+  root.querySelector(".back").onclick = () => { Sound.play("click"); showMenu(); };
+  $("toLab").onclick = () => { Sound.play("click"); showEditor(); };
+  root.querySelectorAll("[data-cedit]").forEach(b => b.onclick = e => { e.stopPropagation(); Sound.play("click"); showEditor(CUSTOM[+b.dataset.cedit], +b.dataset.cedit); });
+  root.querySelectorAll(".mcard").forEach(b => b.onclick = () => {
+    const k = b.dataset.kind, i = +b.dataset.i;
+    if (b.classList.contains("locked")) { Sound.play("wrong"); return; }
+    Sound.play("click");
+    if (k === "custom") { returnTo = "missions"; showLesson("custom", 0, customDef(CUSTOM[i])); }
+    else showLesson(k, i);
+  });
+  root.querySelectorAll("canvas[data-thumb]").forEach(c => { const [k, i] = c.dataset.thumb.split(":");
+    drawThumb(c, k === "boss" ? null : k === "tut" ? TUTORIAL : k === "custom" ? customDef(CUSTOM[+i]) : LEVELS[+i]); });
+}
+function customDef(c) { return { theme: c.theme || 1, B: 2, v: 3, q: 2, m: 2, map: c.map, name: c.name, diff: 2 }; }
+function drawThumb(c, def) {
+  const th = def ? THEMES[def.theme] || THEMES[0] : THEMES[5];
+  const w = c.width = 400, h = c.height = 225, g = c.getContext("2d");
+  const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, th.top); gr.addColorStop(1, th.bot); g.fillStyle = gr; g.fillRect(0, 0, w, h);
+  for (let k = 0; k < 6; k++) { const x = Math.random() * w, y = Math.random() * h, r = 40 + Math.random() * 90, rg = g.createRadialGradient(x, y, 0, x, y, r);
+    rg.addColorStop(0, th.neb[k % 3] + "55"); rg.addColorStop(1, th.neb[k % 3] + "00"); g.fillStyle = rg; g.fillRect(0, 0, w, h); }
+  if (!def) { // boss thumbnail
+    const cx = w / 2, cy = h / 2, R = 92;
+    g.fillStyle = "rgba(224,138,60,.25)"; g.beginPath(); g.arc(cx - 5, cy, R, Math.PI / 2, Math.PI * 1.5); g.fill();
+    g.fillStyle = "rgba(120,140,170,.25)"; g.beginPath(); g.arc(cx + 5, cy, R, -Math.PI / 2, Math.PI / 2); g.fill();
+    g.strokeStyle = "#fb7185"; g.lineWidth = 3; g.beginPath(); g.arc(cx, cy, R, 0, 7); g.stroke();
+    g.strokeStyle = "#facc15"; g.lineWidth = 2; g.beginPath(); for (let a = 0; a < 26; a += .05) { const r = 6 + a * 3.2; g.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r); } g.stroke();
+    const cg = g.createRadialGradient(cx, cy, 0, cx, cy, 30); cg.addColorStop(0, "#fff"); cg.addColorStop(.3, "#fb7185"); cg.addColorStop(1, "rgba(251,113,133,0)");
+    g.fillStyle = cg; g.beginPath(); g.arc(cx, cy, 30, 0, 7); g.fill(); return;
+  }
+  const map = def.map, mw = Math.max(...map.map(r => r.length)), mh = map.length, s = Math.min((w - 20) / mw, (h - 20) / mh), ox = (w - mw * s) / 2, oy = (h - mh * s) / 2;
+  for (let y = 0; y < mh; y++) for (let x = 0; x < mw; x++) {
+    const ch = map[y][x], X = ox + x * s, Y = oy + y * s;
+    if (ch === "#") { g.fillStyle = th.steel[0]; g.fillRect(X, Y, s + .5, s + .5); }
+    else { g.fillStyle = "rgba(10,14,22,.55)"; g.fillRect(X, Y, s + .5, s + .5);
+      if ("ADF".includes(ch)) { g.fillStyle = { A: "#5dff9e", D: "#c084fc", F: "#f472b6" }[ch]; g.globalAlpha = .75; g.fillRect(X, Y, s, s); g.globalAlpha = 1; }
+      else if (ch === "o") { g.fillStyle = "#facc15"; g.beginPath(); g.arc(X + s / 2, Y + s / 2, s * .3, 0, 7); g.fill(); }
+      else if (ch === "E") { g.fillStyle = "#a78bfa"; g.fillRect(X, Y, s, s); }
+      else if (ch === "S") { g.fillStyle = "#ff6b6b"; g.beginPath(); g.arc(X + s / 2, Y + s / 2, s * .45, 0, 7); g.fill(); }
+      else if (ch === "C") { g.strokeStyle = "#4fd6ff"; g.strokeRect(X + 1, Y + 1, s - 2, s - 2); } }
+  }
+  g.strokeStyle = th.edge; g.globalAlpha = .7; g.lineWidth = 1.5; g.strokeRect(ox + .5, oy + .5, mw * s - 1, mh * s - 1); g.globalAlpha = 1;
+}
+
+// ---------- settings ----------
+let settingsReturn = "menu", resetArmed = false;
+function showSettings(ret) {
+  settingsReturn = ret; resetArmed = false;
+  if (ret === "menu") state = "settings";
+  showScreen("settings");
+  const seg = (key, opts) => `<div class="seg" data-key="${key}">${opts.map(([v, l]) => `<button data-v="${v}" class="${String(SET[key]) === String(v) ? "active" : ""}">${l}</button>`).join("")}</div>`;
+  const tog = key => `<button class="tog ${SET[key] ? "on" : ""}" data-tog="${key}" aria-label="${key}"></button>`;
+  const row = (lbl, sub, ctl) => `<div class="srow"><div class="lbl">${lbl}${sub ? `<small>${sub}</small>` : ""}</div>${ctl}</div>`;
+  $("settings").innerHTML = `<div class="wrap">
+    <div class="titlebar console"><button class="cbtn back">${T("back")}</button><h2>${T("setTitle")}<small>${T("setSub")}</small></h2></div>
+    <div class="console screw spanel">${head("AUDIO / LANGUAGE", "CFG-01")}
+      ${row("🌐 " + T("sLang"), "", seg("lang", [["en", "English"], ["id", "Bahasa Indonesia"]]))}
+      ${row("🔊 " + T("sSfx"), "", `<input type="range" min="0" max="1" step="0.05" value="${SET.sfx}" data-range="sfx">`)}
+      ${row("🎵 " + T("sMusic"), "", `<input type="range" min="0" max="1" step="0.05" value="${SET.music}" data-range="music">`)}
+    </div><br>
+    <div class="console screw spanel">${head("GAMEPLAY / HUD", "CFG-02")}
+      ${row("🐢 " + T("sSpeed"), T("sSpeedSub"), seg("speed", [[0.7, T("slow")], [1, T("normal")], [1.25, T("fast")]]))}
+      ${row("🖥 " + T("sHud"), T("sHudSub"), seg("hud", [["full", T("full")], ["compact", T("compact")]]))}
+      ${row("⭕ " + T("sCircle"), T("sCircleSub"), tog("circle"))}
+      ${row("➡️ " + T("sVectors"), T("sVectorsSub"), tog("vectors"))}
+      ${row("🔓 " + T("sUnlock"), T("sUnlockSub"), tog("unlockAll"))}
+    </div><br>
+    <div class="console screw spanel">${head("VISUAL FX", "CFG-03")}
+      ${row("✨ " + T("sTrail"), "", seg("trail", [["classic", T("classic")], ["rainbow", "🌈 " + T("rainbow")], ["fire", "🔥 " + T("fire")], ["plasma", "🟣 " + T("plasma")]]))}
+      ${row("📳 " + T("sShake"), "", tog("shake"))}
+      ${row("📺 " + T("sScan"), "", tog("scan"))}
+      ${row("💎 " + T("sHq"), T("sHqSub"), tog("hq"))}
+      ${row("🗑️ " + T("sReset"), T("sResetSub"), `<button class="cbtn danger" id="resetBtn">${T("resetBtn")}</button>`)}
+    </div></div>`;
+  const root = $("settings");
+  root.querySelector(".back").onclick = () => {
+    Sound.play("click");
+    if (settingsReturn === "pause") { showScreen(null); document.body.classList.add("playing"); document.body.classList.toggle("tutorial", mode === "tut"); document.body.classList.toggle("boss", mode === "boss"); state = "play"; requestAnimationFrame(sizeHudCanvases); showPause(); }
+    else showMenu();
+  };
+  root.querySelectorAll(".seg").forEach(s => s.querySelectorAll("button").forEach(b => b.onclick = () => {
+    const k = s.dataset.key; let v = b.dataset.v; if (k === "speed") v = +v;
+    SET[k] = v; saveSet(); applyBodyClasses(); Sound.play("click"); showSettings(settingsReturn);
+  }));
+  root.querySelectorAll("[data-tog]").forEach(b => b.onclick = () => { const k = b.dataset.tog; SET[k] = !SET[k]; saveSet(); applyBodyClasses(); Sound.play("click"); b.classList.toggle("on", SET[k]); });
+  root.querySelectorAll("[data-range]").forEach(r => { r.oninput = () => { SET[r.dataset.range] = +r.value; saveSet(); Sound.init(); Sound.volume(); }; r.onchange = () => Sound.play("orb"); });
+  $("resetBtn").onclick = e => {
+    if (!resetArmed) { resetArmed = true; e.target.textContent = T("resetSure"); return; }
+    PROG = blankProgress(); saveProg(); resetArmed = false; e.target.textContent = "✔"; Sound.play("crash");
+  };
+}
+
+// ---------- physics book ----------
+function showBook(tab) {
+  state = "book"; showScreen("book");
+  const B = BOOK[SET.lang];
+  const prof = txt => `<div class="prof">${mascotSVG()}<p><b>${T("profSays")}:</b> ${txt}</p></div>`;
+  const box = (title, html) => `<div class="console screw txt">${head(title, "REF")}<div style="padding:12px 14px">${html}</div></div>`;
+  let body = "";
+  if (tab === 0) body = `<div class="page">${box(B.force.t, `<p>${B.force.p}</p><div class="formula">${B.force.f}</div>
+      <table class="sym"><tr><th>${B.force.sym}</th><th></th><th>${B.force.unit}</th></tr>${B.force.rows.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td></tr>`).join("")}</table>
+      <p class="muted">${B.force.after}</p>`)}<div class="console screw art">${bookSVG("force")}</div></div>`;
+  if (tab === 1) body = `<div class="page">${box(B.rhr.t, `<p>${B.rhr.p}</p><div class="formula">F = q (v × B)</div><p class="muted">${B.rhr.after}</p>${prof(B.rhr.tip)}`)}
+      <div class="console screw art">${bookSVG("rhr")}</div></div>`;
+  if (tab === 2) body = `<div class="page">${box(B.circle.t, `<p>${B.circle.p}</p><div class="formula">${B.circle.f}</div><div class="formula">${B.circle.f2}</div><p class="muted">${B.circle.after}</p>`)}
+      <div class="console screw art">${bookSVG("circle")}</div></div>`;
+  if (tab === 3) body = `<div class="page">${box(B.wire.t, `<p>${B.wire.p}</p>${B.wire.steps.map(s => `<div class="formula" style="font-size:17px">${s}</div>`).join("")}<p class="muted">${B.wire.after}</p>`)}
+      <div class="console screw art">${bookSVG("wire")}</div></div>`;
+  if (tab === 4) body = `<div class="cardgrid">${B.real.items.map(([k, t, d]) => `<div class="console screw app">${head(t, "APP")}${bookSVG(k)}<div class="t">${d}</div></div>`).join("")}</div>`;
+  if (tab === 5) body = `<div class="page">${box(B.ex.t, `<p>${B.ex.p}</p>${B.ex.steps.map(s => `<div class="formula" style="font-size:17px">${s}</div>`).join("")}${prof(B.ex.tip)}`)}
+      <div class="console screw art">${bookSVG("circle")}</div></div>`;
+  $("book").innerHTML = `<div class="wrap"><div class="titlebar console"><button class="cbtn back">${T("back")}</button><h2>${T("bookTitle")}<small>${T("bookSub")}</small></h2></div>
+    <div class="tabs">${B.tabs.map((t, i) => `<button data-t="${i}" class="${i === tab ? "active" : ""}">${t}</button>`).join("")}</div>${body}</div>`;
+  $("book").querySelector(".back").onclick = () => { Sound.play("click"); showMenu(); };
+  $("book").querySelectorAll(".tabs button").forEach(b => b.onclick = () => { Sound.play("click"); showBook(+b.dataset.t); });
+}
+
+// ---------- briefing / play / debrief ----------
+function langSwitch() {
+  return `<div class="seg" style="justify-content:flex-end;margin-bottom:6px" id="mlang"><button data-l="en" class="${SET.lang === "en" ? "active" : ""}">EN</button><button data-l="id" class="${SET.lang === "id" ? "active" : ""}">ID</button></div>`;
+}
+function bindLang(rerender) { card.querySelectorAll("#mlang button").forEach(b => b.onclick = () => { SET.lang = b.dataset.l; saveSet(); Sound.play("click"); rerender(); }); }
+
+function showLesson(m, i = 0, custom) {
+  Sound.init(); showScreen(null); document.body.classList.remove("playing", "tutorial", "boss");
+  loadLevel(m, i, custom);
+  state = "lesson";
+  if (m === "tut" || m === "custom") { startPlay(); return; }
+  const render = () => {
+    const def = m === "boss" ? BOSS : LEVELS[i], l = def[SET.lang];
+    showModal(`${head(T("briefing"), m === "boss" ? "⚠ CLASSIFIED" : `${T("mission").toUpperCase()} 0${i + 1}/04`)}<div class="cbody">${langSwitch()}
+      <div class="tag">${m === "boss" ? "⚠ BOSS" : `${T("mission")} 0${i + 1}`} · ${theme.name}</div>
+      <h2>${l.name}</h2>
+      ${lessonSVG(m === "boss" ? 4 : i)}
+      <ul>${l.lesson.map(s => `<li>${s}</li>`).join("")}</ul>
+      <div class="formula">${def.formula}</div>
+      <div class="prof">${mascotSVG()}<p><b>${T("profSays")}:</b> ${l.prof}</p></div>
+      ${m === "boss" ? "" : `<div class="goal">🎯 ${T("goal")}</div>`}
+      <div class="btns"><button class="cbtn" id="mm">⌂ ${T("menu")}</button><button class="cbtn primary" id="go">▶ ${T("start")}</button></div></div>`);
+    bindLang(render);
+    $("go").onclick = () => { Sound.play("click"); startPlay(); };
+    $("mm").onclick = () => { Sound.play("click"); showMenu(); };
+  };
+  render();
+}
+
+function showPause() {
+  if (state !== "play") return;
+  state = "paused"; keyL = keyR = false; Sound.setHum(0);
+  const render = () => {
+    showModal(`${head(T("paused"), levelTag())}<div class="cbody">${langSwitch()}<h2>❚❚ ${T("paused")}</h2>
+      <div class="btns" style="flex-direction:column">
+        <button class="cbtn primary" id="pr">▶ ${T("resume")}</button>
+        <button class="cbtn" id="prs">↺ ${T("restart")}</button>
+        <button class="cbtn" id="pst">⚙ ${T("nSet")}</button>
+        ${mode === "custom" && returnTo === "editor" ? `<button class="cbtn warn" id="ped">✎ ${T("toLab")}</button>` : ""}
+        <button class="cbtn" id="pm">⌂ ${T("menu")}</button></div></div>`);
+    bindLang(render);
+    $("pr").onclick = () => { Sound.play("click"); hideModal(); state = "play"; if (mode === "tut") renderTut(); };
+    $("prs").onclick = () => { Sound.play("click"); hideModal(); loadLevel(mode, lvlIdx, customRef); state = "play"; if (mode === "tut") renderTut(); };
+    $("pst").onclick = () => { Sound.play("click"); hideModal(); showSettings("pause"); state = "paused"; };
+    $("pm").onclick = () => { Sound.play("click"); showMenu(); };
+    const pe = $("ped"); if (pe) pe.onclick = () => { Sound.play("click"); showEditor(); };
+  };
+  render();
+}
+
+function levelDone() {
+  Sound.play("win"); popConfetti(); Sound.setHum(0);
+  if (P) burst(P.x, P.y, "#a78bfa", 80);
+  document.body.classList.remove("playing", "tutorial", "boss");
+  if (mode === "tut") {
+    state = "tutdone"; PROG.tutorial = true; saveProg();
+    const render = () => {
+      showModal(`${head(T("tutDone"), "TRAINING")}<div class="cbody">${langSwitch()}
+        <div style="display:flex;justify-content:center">${mascotSVG('style="width:120px"')}</div>
+        <h2 style="text-align:center">🎓 ${T("tutDone")}</h2><p style="text-align:center">${T("tutDoneText")}</p>
+        <div class="btns"><button class="cbtn" id="tm">⌂ ${T("menu")}</button><button class="cbtn primary" id="t1">▶ ${T("toLevel1")}</button></div></div>`);
+      bindLang(render);
+      $("tm").onclick = () => { Sound.play("click"); showMenu(); };
+      $("t1").onclick = () => { Sound.play("click"); showLesson("level", 0); };
+    };
+    render(); return;
+  }
+  state = "done";
+  let s, idx = mode === "boss" ? 4 : lvlIdx, newBest = false;
+  const bonus = mode === "boss" ? PTS_FINISH * 2 : PTS_FINISH;
+  addScore(bonus); score = Math.max(0, score);
+  if (mode === "boss") s = boss.hits <= 2 ? 3 : boss.hits <= 6 ? 2 : 1;
+  else { const max = orbs.length * PTS_ORB + PTS_FINISH, frac = score / max; s = frac >= .9 ? 3 : frac >= .6 ? 2 : 1; }
+  let newBestScore = false;
+  if (mode !== "custom") {
+    PROG.done[idx] = true; PROG.stars[idx] = Math.max(PROG.stars[idx], s);
+    if (score > PROG.score[idx]) { newBestScore = PROG.score[idx] > 0; PROG.score[idx] = score; }
+    const prev = PROG.best[idx];
+    if (!prev || timeT < prev) { newBest = !!prev; PROG.best[idx] = timeT; }
+    saveProg();
+  }
+  const field = timeT ? stats.fieldT / timeT * 100 : 0;
+  const render = () => {
+    const nextBtn = mode === "custom" ? (returnTo === "editor" ? `<button class="cbtn primary" id="nx">✎ ${T("toLab")}</button>` : `<button class="cbtn primary" id="nx">⌂ ${T("nMis")}</button>`)
+      : mode === "boss" ? `<button class="cbtn primary" id="nx">🏆 ${T("next")}</button>`
+      : `<button class="cbtn primary" id="nx">${lvlIdx === 3 ? "⚠ " + T("toBoss") : "▶ " + T("next")}</button>`;
+    showModal(`${head(T("complete"), levelTag())}<div class="cbody">${langSwitch()}
+      <div class="tag" style="text-align:center">${levelTag()} · ${levelName()}</div>
+      <h2 style="text-align:center">${mode === "boss" ? "🏆 " + T("bossWin") : T("complete")}</h2>
+      <div class="scoreline"><small>${T("score").toUpperCase()}</small><b>${score}</b>
+        <small>${mode === "boss" ? "" : `${T("orbs")} ${collected}×${PTS_ORB} + `}${bonus} − ${T("crashes").toLowerCase()} ${penN}×${PTS_CRASH}${mode !== "custom" ? ` · ${T("bestScore")}: ${PROG.score[idx]}${newBestScore ? " ★" : ""}` : ""}</small>
+        <small style="opacity:.75">${T("scoreRule")}</small></div>
+      <div class="bigstars">${[0, 1, 2].map(k => `<span class="${k < s ? "on" : ""}" style="animation-delay:${.2 + k * .25}s">★</span>`).join("")}</div>
+      ${newBest && mode !== "custom" ? `<div style="text-align:center;font:700 13px var(--ui);letter-spacing:3px;color:var(--green)">${T("newBest")}</div>` : ""}
+      <div class="debrief">
+        <div><small>${T("time")}</small><b>${timeT.toFixed(1)} s</b></div>
+        <div><small>${mode === "boss" ? T("dHits") : T("orbs")}</small><b class="nb">${mode === "boss" ? boss.hits : collected + "/" + orbs.length}</b></div>
+        <div><small>${mode === "boss" ? T("dKicks") : T("crashes")}</small><b>${mode === "boss" ? boss.kicks : crashes}</b></div>
+        <div><small>${T("dBest")}</small><b>${mode !== "custom" && PROG.best[idx] ? PROG.best[idx].toFixed(1) + " s" : "—"}</b></div>
+        <div><small>${T("dMaxV")}</small><b>${stats.maxV.toFixed(2)} m/s</b></div>
+        <div><small>${T("dMaxF")}</small><b>${stats.maxF.toFixed(1)} mN</b></div>
+        <div><small>${T("dDist")}</small><b>${stats.dist.toFixed(1)} m</b></div>
+        <div><small>${T("dField")}</small><b>${field.toFixed(0)} %</b></div>
+      </div>
+      <div class="btns"><button class="cbtn" id="re">↺ ${T("retry")}</button>${nextBtn}</div></div>`);
+    bindLang(render);
+    $("re").onclick = () => { Sound.play("click"); showLesson(mode, lvlIdx, customRef); };
+    $("nx").onclick = () => {
+      Sound.play("click");
+      if (mode === "custom") return returnTo === "editor" ? showEditor() : showMissions();
+      if (mode === "boss") return showFinale();
+      if (lvlIdx === 3) return showLesson("boss", 4);
+      showLesson("level", lvlIdx + 1);
+    };
+  };
+  render();
+}
+
+function showFinale() {
+  state = "finale"; popConfetti(); Sound.play("win");
+  const total = PROG.stars.reduce((a, b) => a + b, 0);
+  const render = () => {
+    showModal(`${head(T("finishTitle"), "DEBRIEF")}<div class="cbody">${langSwitch()}
+      <div style="display:flex;justify-content:center">${mascotSVG('style="width:110px"')}</div>
+      <h2 style="text-align:center">🏆 ${T("finishTitle")}</h2><p style="text-align:center" class="muted">${T("finishSub")}</p>
+      <div class="bigstars" style="font-size:34px"><span class="on">★</span> ${total} / ${NMIS * 3}</div>
+      <ul>${T("summary").map(s => `<li>${s}</li>`).join("")}</ul>
+      <div class="formula">F = q v × B · r = m v / (|q| B) · T = 2πm / (|q| B)</div>
+      <div class="btns"><button class="cbtn" id="fm">⌂ ${T("menu")}</button><button class="cbtn primary" id="ag">↺ ${T("again")}</button></div></div>`);
+    bindLang(render);
+    $("ag").onclick = () => { Sound.play("click"); showLesson("level", 0); };
+    $("fm").onclick = () => { Sound.play("click"); showMenu(); };
+  };
+  render();
+}
+
+// =====================================================================
+//  DESIGN LAB (level editor)
+// =====================================================================
+const ED = { w: 32, h: 18, grid: null, tool: "#", name: "", theme: 1, editIdx: -1, hover: null, painting: 0, armDel: -1 };
+const TOOL_LIST = [["#", "▦", "#5a667c"], [".", "⌫", "#1b2230"], ["S", "▶", "#ff6b6b"], ["E", "◎", "#a78bfa"], ["o", "●", "#facc15"], ["C", "CP", "#4fd6ff"], ["A", "⚡+", "#5dff9e"], ["D", "⚡−", "#c084fc"], ["F", "±", "#f472b6"]];
+function edBlank() { const g = []; for (let y = 0; y < ED.h; y++) { const r = []; for (let x = 0; x < ED.w; x++) r.push(x === 0 || y === 0 || x === ED.w - 1 || y === ED.h - 1 ? "#" : "."); g.push(r); } return g; }
+function edToMap() { return ED.grid.map(r => r.join("")); }
+const enc = s => btoa(String.fromCharCode(...new TextEncoder().encode(s)));
+const dec = b => new TextDecoder().decode(Uint8Array.from(atob(b), c => c.charCodeAt(0)));
+function edCount(ch) { let n = 0; for (const r of ED.grid) for (const c of r) if (c === ch) n++; return n; }
+
+function showEditor(level, idx) {
+  if (level) { ED.grid = level.map.map(r => r.split("")); ED.h = ED.grid.length; ED.w = ED.grid[0].length; ED.name = level.name || ""; ED.theme = level.theme || 1; ED.editIdx = idx ?? -1; }
+  if (!ED.grid) ED.grid = edBlank();
+  state = "editor"; showScreen("editor"); returnTo = "editor";
+  $("editor").innerHTML = `<div class="wrap" style="max-width:1400px">
+    <div class="titlebar console"><button class="cbtn back">${T("back")}</button><h2>${T("edTitle")}<small>${T("edSub")} · ${ED.w}×${ED.h} m</small></h2>
+      <button class="cbtn primary" id="edTest">▶ ${T("edTest")}</button><button class="cbtn" id="edSave">💾 ${T("edSave")}</button></div>
+    <div class="edgrid">
+      <div class="console screw">${head(T("edTools"), "")}<div class="tools">${TOOL_LIST.map(([k, ic, col]) =>
+        `<button class="tool ${ED.tool === k ? "active" : ""}" data-tool="${k}"><span class="ic" style="background:${col}22;color:${col};border:1px solid ${col}88">${ic}</span>${T("tools")[k]}</button>`).join("")}</div></div>
+      <div class="console screw">${head("BLUEPRINT", "GRID 1 m")}<div style="padding:8px"><div class="screen-glass"><canvas id="edCanvas"></canvas></div></div><div class="edhint">${T("edHint")}</div></div>
+      <div class="edside">
+        <div class="console screw">${head(T("edName"), "")}<div class="body"><input type="text" id="edName" maxlength="40" placeholder="${T("untitled")}" value="${ED.name.replace(/"/g, "&quot;")}">
+          <div class="seg" id="edTheme">${THEMES.slice(0, 5).map((th, i) => `<button data-th="${i}" class="${ED.theme === i ? "active" : ""}" style="border-bottom:3px solid ${th.edge}">${th.name.split(" ")[0]}</button>`).join("")}</div></div></div>
+        <div class="console screw">${head(T("edCheck"), "")}<div class="body" id="edChecks"></div></div>
+        <div class="console screw">${head(T("edShare"), "MD1")}<div class="body">
+          <div class="btnrow"><button class="cbtn" id="edShareB">📤 ${T("edShare")}</button><button class="cbtn" id="edNew">🗑 ${T("edNew")}</button></div>
+          <textarea id="edCode" placeholder="MD1:..."></textarea>
+          <div class="btnrow"><button class="cbtn" id="edCopy">${T("edCopy")}</button><button class="cbtn" id="edLoad">📥 ${T("edLoad")}</button></div></div></div>
+        <div class="console screw">${head(T("edSaved"), CUSTOM.length + "")}<div class="body"><div class="slist" id="edList"></div></div></div>
+      </div></div></div>`;
+  const root = $("editor");
+  root.querySelector(".back").onclick = () => { Sound.play("click"); showMenu(); };
+  root.querySelectorAll("[data-tool]").forEach(b => b.onclick = () => { ED.tool = b.dataset.tool; Sound.play("click"); root.querySelectorAll("[data-tool]").forEach(x => x.classList.toggle("active", x === b)); });
+  root.querySelectorAll("[data-th]").forEach(b => b.onclick = () => { ED.theme = +b.dataset.th; Sound.play("click"); root.querySelectorAll("[data-th]").forEach(x => x.classList.toggle("active", x === b)); edDraw(); });
+  $("edName").oninput = e => { ED.name = e.target.value; };
+  $("edTest").onclick = () => {
+    if (!edCount("S") || !edCount("E")) { Sound.play("wrong"); toast(T("edNeed"), "#ff5d5d"); return; }
+    Sound.play("click"); returnTo = "editor";
+    showLesson("custom", 0, { theme: ED.theme, B: 2, v: 3, q: 2, m: 2, map: edToMap(), name: ED.name || T("untitled"), diff: 2 });
+  };
+  $("edSave").onclick = () => {
+    if (!edCount("S") || !edCount("E")) { Sound.play("wrong"); toast(T("edNeed"), "#ff5d5d"); return; }
+    const lv = { name: ED.name || T("untitled"), theme: ED.theme, map: edToMap() };
+    if (ED.editIdx >= 0 && CUSTOM[ED.editIdx]) CUSTOM[ED.editIdx] = lv; else { CUSTOM.push(lv); ED.editIdx = CUSTOM.length - 1; }
+    saveCustom(); Sound.play("check"); toast(T("edSavedMsg"), "#5dff9e"); edList();
+  };
+  $("edNew").onclick = () => { ED.grid = edBlank(); ED.name = ""; ED.editIdx = -1; $("edName").value = ""; Sound.play("click"); edDraw(); edChecks(); };
+  $("edShareB").onclick = () => { $("edCode").value = "MD1:" + enc(JSON.stringify({ n: ED.name, t: ED.theme, m: edToMap() })); $("edCode").select(); Sound.play("click"); };
+  $("edCopy").onclick = async () => {
+    const ta = $("edCode"); if (!ta.value) $("edShareB").click();
+    try { await navigator.clipboard.writeText(ta.value); } catch (e) { ta.select(); try { document.execCommand("copy"); } catch (e2) {} }
+    toast(T("edCopied"), "#5dff9e"); Sound.play("check");
+  };
+  $("edLoad").onclick = () => {
+    try {
+      const raw = $("edCode").value.trim().replace(/^MD1:/, ""), o = JSON.parse(dec(raw));
+      if (!Array.isArray(o.m) || !o.m.length || o.m.some(r => typeof r !== "string" || r.length !== o.m[0].length || /[^#.SEoCADF]/.test(r)) || o.m.length > 40 || o.m[0].length > 60) throw 0;
+      ED.grid = o.m.map(r => r.split("")); ED.h = ED.grid.length; ED.w = ED.grid[0].length; ED.name = String(o.n || "").slice(0, 40); ED.theme = Math.min(4, Math.max(0, +o.t || 0)); ED.editIdx = -1;
+      Sound.play("check"); toast(T("edLoaded"), "#5dff9e"); showEditor();
+    } catch (e) { Sound.play("wrong"); toast(T("edBad"), "#ff5d5d"); }
+  };
+  const c = $("edCanvas");
+  const cellFromEvent = e => { const r = c.getBoundingClientRect(); return [Math.floor((e.clientX - r.left) / r.width * ED.w), Math.floor((e.clientY - r.top) / r.height * ED.h)]; };
+  const paint = (x, y, erase) => {
+    if (x <= 0 || y <= 0 || x >= ED.w - 1 || y >= ED.h - 1) return;
+    const t = erase ? "." : ED.tool;
+    if (t === "S") for (const r of ED.grid) for (let i = 0; i < r.length; i++) if (r[i] === "S") r[i] = ".";
+    if (ED.grid[y][x] !== t) { ED.grid[y][x] = t; edDraw(); edChecks(); }
+  };
+  c.addEventListener("contextmenu", e => e.preventDefault());
+  c.addEventListener("pointerdown", e => { e.preventDefault(); c.setPointerCapture(e.pointerId); ED.painting = e.button === 2 ? 2 : 1; const [x, y] = cellFromEvent(e); paint(x, y, ED.painting === 2); Sound.play("click"); });
+  c.addEventListener("pointermove", e => { const [x, y] = cellFromEvent(e); ED.hover = [x, y]; if (ED.painting) paint(x, y, ED.painting === 2); else edDraw(); });
+  c.addEventListener("pointerup", () => { ED.painting = 0; });
+  c.addEventListener("pointerleave", () => { ED.hover = null; edDraw(); });
+  requestAnimationFrame(() => { edDraw(); edChecks(); edList(); });
+}
+function edDraw() {
+  const c = $("edCanvas"); if (!c) return;
+  const cw = c.clientWidth * dpr, cs = Math.floor(cw / ED.w); c.width = cs * ED.w; c.height = cs * ED.h;
+  c.style.aspectRatio = `${ED.w} / ${ED.h}`;
+  const g = c.getContext("2d"), th = THEMES[ED.theme];
+  const gr = g.createLinearGradient(0, 0, 0, c.height); gr.addColorStop(0, th.top); gr.addColorStop(1, th.bot); g.fillStyle = gr; g.fillRect(0, 0, c.width, c.height);
+  for (let y = 0; y < ED.h; y++) for (let x = 0; x < ED.w; x++) {
+    const ch = ED.grid[y][x], X = x * cs, Y = y * cs;
+    if (ch === "#") { const mg = g.createLinearGradient(X, Y, X + cs, Y + cs); mg.addColorStop(0, th.steel[0]); mg.addColorStop(1, th.steel[1]); g.fillStyle = mg; g.fillRect(X, Y, cs, cs);
+      g.strokeStyle = "rgba(255,255,255,.08)"; g.strokeRect(X + 2, Y + 2, cs - 4, cs - 4); continue; }
+    g.fillStyle = "rgba(10,14,22,.55)"; g.fillRect(X, Y, cs, cs);
+    g.textAlign = "center"; g.textBaseline = "middle"; g.font = `700 ${cs * .45}px Rajdhani, sans-serif`;
+    if ("ADF".includes(ch)) { const col = { A: "#5dff9e", D: "#c084fc", F: "#f472b6" }[ch]; g.fillStyle = col + "44"; g.fillRect(X, Y, cs, cs); g.fillStyle = col; g.fillText({ A: "⚡+", D: "⚡−", F: "±" }[ch], X + cs / 2, Y + cs / 2); }
+    else if (ch === "o") { g.fillStyle = "#facc15"; g.beginPath(); g.arc(X + cs / 2, Y + cs / 2, cs * .22, 0, 7); g.fill(); }
+    else if (ch === "E") { g.fillStyle = "#a78bfa66"; g.fillRect(X, Y, cs, cs); g.strokeStyle = "#e9d5ff"; g.beginPath(); g.arc(X + cs / 2, Y + cs / 2, cs * .32, 0, 7); g.stroke(); }
+    else if (ch === "S") { g.fillStyle = "#ff6b6b"; g.beginPath(); g.arc(X + cs / 2, Y + cs / 2, cs * .3, 0, 7); g.fill(); g.strokeStyle = "#5dff9e"; g.lineWidth = 2;
+      g.beginPath(); g.moveTo(X + cs * .6, Y + cs / 2); g.lineTo(X + cs * 1.4, Y + cs / 2); g.stroke(); g.lineWidth = 1; }
+    else if (ch === "C") { g.strokeStyle = "#4fd6ff"; g.beginPath(); g.arc(X + cs / 2, Y + cs / 2, cs * .3, 0, 7); g.stroke(); g.fillStyle = "#4fd6ff"; g.font = `${cs * .28}px Share Tech Mono, monospace`; g.fillText("CP", X + cs / 2, Y + cs / 2); }
+  }
+  g.strokeStyle = "rgba(93,255,158,.1)"; g.lineWidth = 1;
+  for (let x = 0; x <= ED.w; x++) { g.beginPath(); g.moveTo(x * cs + .5, 0); g.lineTo(x * cs + .5, c.height); g.stroke(); }
+  for (let y = 0; y <= ED.h; y++) { g.beginPath(); g.moveTo(0, y * cs + .5); g.lineTo(c.width, y * cs + .5); g.stroke(); }
+  // turning-radius guide (r = 1.5 m) next to the start, to help design corridors
+  for (let y = 0; y < ED.h; y++) for (let x = 0; x < ED.w; x++) if (ED.grid[y][x] === "S") {
+    g.strokeStyle = "rgba(91,134,255,.5)"; g.setLineDash([4, 4]); g.beginPath(); g.arc((x + .5) * cs, (y + .5 - 1.5) * cs, 1.5 * cs, 0, 7); g.stroke(); g.setLineDash([]);
+  }
+  if (ED.hover) { const [x, y] = ED.hover; g.strokeStyle = "#ffb547"; g.lineWidth = 2; g.strokeRect(x * cs + 1, y * cs + 1, cs - 2, cs - 2); }
+}
+function edChecks() {
+  const el = $("edChecks"); if (!el) return;
+  const s = edCount("S"), e = edCount("E"), o = edCount("o");
+  el.innerHTML = `<div class="check"><span>${T("edStart")}</span><span class="${s ? "ok" : "bad"}">${s ? "✔ OK" : "✖"}</span></div>
+    <div class="check"><span>${T("edPortal")}</span><span class="${e ? "ok" : "bad"}">${e ? "✔ " + e : "✖"}</span></div>
+    <div class="check"><span>${T("edOrbs")}</span><span class="ok">${o}</span></div>
+    <div class="check"><span>r (v=3, B=2)</span><span style="color:var(--cyan)">1.50 m</span></div>`;
+}
+function edList() {
+  const el = $("edList"); if (!el) return;
+  el.innerHTML = CUSTOM.length ? CUSTOM.map((c, i) => `<div class="sitem"><span>${c.name || T("untitled")}</span>
+    <button class="cbtn" data-e="${i}">✎</button><button class="cbtn" data-p="${i}">▶</button><button class="cbtn danger" data-d="${i}">${ED.armDel === i ? T("edSureDel") : T("edDel")}</button></div>`).join("")
+    : `<div class="muted">${T("edNone")}</div>`;
+  el.querySelectorAll("[data-e]").forEach(b => b.onclick = () => { Sound.play("click"); showEditor(CUSTOM[+b.dataset.e], +b.dataset.e); });
+  el.querySelectorAll("[data-p]").forEach(b => b.onclick = () => { Sound.play("click"); returnTo = "editor"; showLesson("custom", 0, customDef(CUSTOM[+b.dataset.p])); });
+  el.querySelectorAll("[data-d]").forEach(b => b.onclick = () => {
+    const i = +b.dataset.d;
+    if (ED.armDel !== i) { ED.armDel = i; edList(); return; }
+    CUSTOM.splice(i, 1); saveCustom(); ED.armDel = -1; if (ED.editIdx === i) ED.editIdx = -1; else if (ED.editIdx > i) ED.editIdx--;
+    Sound.play("crash"); edList();
+  });
+}
+
+// =====================================================================
+//  INPUT
+// =====================================================================
+const isTyping = e => ["INPUT", "TEXTAREA"].includes(e.target.tagName);
+addEventListener("keydown", e => {
+  if (isTyping(e)) return;
+  Sound.init();
+  if (["ArrowLeft", "KeyA"].includes(e.code)) { keyL = true; e.preventDefault(); }
+  if (["ArrowRight", "KeyD"].includes(e.code)) { keyR = true; e.preventDefault(); }
+  if ((e.code === "Escape" || e.code === "KeyP") && state === "play") { showPause(); return; }
+  if (e.code === "Escape" && state === "paused") { $("pr")?.click(); return; }
+  if (state === "play" && mode === "boss" && ["Space", "KeyW", "ArrowUp"].includes(e.code)) { e.preventDefault(); if (!e.repeat) requestKick(); return; }
+  if (e.code === "Enter" || e.code === "Space") {
+    if (modal.classList.contains("show")) { const b = card.querySelector(".cbtn.primary"); if (b) { e.preventDefault(); b.click(); } }
+    else if (state === "play" && mode === "tut" && TUT_STEPS[tutStep].kind === "btn") { e.preventDefault(); Sound.play("click"); tutAdvance(); }
+  }
+});
+addEventListener("keyup", e => {
+  if (["ArrowLeft", "KeyA"].includes(e.code)) keyL = false;
+  if (["ArrowRight", "KeyD"].includes(e.code)) keyR = false;
+});
+addEventListener("blur", () => { keyL = keyR = false; if (state === "play") showPause(); });
+function holdButton(el, set) {
+  el.addEventListener("pointerdown", e => { e.preventDefault(); Sound.init(); el.setPointerCapture(e.pointerId); set(true); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) el.addEventListener(ev, () => set(false));
+  el.addEventListener("contextmenu", e => e.preventDefault());
+}
+holdButton($("padL"), v => keyL = v);
+holdButton($("padR"), v => keyR = v);
+$("padK").addEventListener("pointerdown", e => { e.preventDefault(); Sound.init(); requestKick(); });
+cv.addEventListener("pointerdown", e => { if (state !== "play") return; cv.setPointerCapture(e.pointerId); if (e.clientX < innerWidth / 2) keyL = true; else keyR = true; });
+for (const ev of ["pointerup", "pointercancel"]) cv.addEventListener(ev, () => { keyL = keyR = false; });
+$("pauseBtn").onclick = () => { Sound.play("click"); showPause(); };
+
+// =====================================================================
+//  LOOP
+// =====================================================================
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  update(dt);
+  for (const s of sparks) { s.x += s.vx * dt; s.y += s.vy * dt; s.vx *= .95; s.vy *= .95; s.life -= dt; }
+  sparks = sparks.filter(s => s.life > 0);
+  for (const p of popups) p.life -= dt; popups = popups.filter(p => p.life > 0);
+  for (const d of dust) { d.x += d.vx * dt; d.y += d.vy * dt;
+    if (mode !== "boss" && mapW) { if (d.x < 0) d.x += mapW; if (d.x > mapW) d.x -= mapW; if (d.y < 0) d.y += mapH; if (d.y > mapH) d.y -= mapH; } }
+  if (shake > 0) shake = Math.max(0, shake - dt);
+  if (flash) { flash.t -= dt; if (flash.t <= 0) flash = null; }
+  if (state !== "play") Bnow = 0;
+  Sound.setHum(state === "play" && deadT <= 0 ? Bnow : 0);
+  factTimer += dt; if (factTimer > 9) { factTimer = 0; factIdx++; if (state === "menu") renderFact(); }
+  draw(now, dt); drawFX(dt); updateHUD(now / 1000);
+  requestAnimationFrame(loop);
+}
+addEventListener("resize", () => { resize(); if (state === "menu") makeAttract(); if (state === "editor") edDraw(); });
+resize(); applyBodyClasses();
+showMenu();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
